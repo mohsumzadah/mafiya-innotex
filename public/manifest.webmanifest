@@ -1,0 +1,14 @@
+{
+  "name": "Oyun Gecəsi — Mafia, İmposter, Səssiz kino",
+  "short_name": "Oyun Gecəsi",
+  "description": "Telefonda qrup oyunları: Mafia, İmposter, Səssiz kino",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f4f5f8",
+  "theme_color": "#4338ca",
+  "lang": "az",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

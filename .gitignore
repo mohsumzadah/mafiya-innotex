@@ -1,0 +1,15 @@
+# Asılılıqlar
+node_modules/
+
+# Canlı baza və ehtiyat nüsxələr (istifadəçi məlumatları — heç vaxt repoya düşməməlidir)
+data/
+backups/
+*.db
+*.db-wal
+*.db-shm
+
+# Mühit dəyişənləri (.env.example-dən kopyala)
+.env
+
+*.log
+.DS_Store
