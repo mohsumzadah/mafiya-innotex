@@ -1683,7 +1683,7 @@ const App = {
           <h2>Gecə mafia ov edir.<br>Gündüz kənd mafianı tapır.</h2>
           <p>Online Mafia: çatda müzakirə et, səs ver, kəndi xilas et.</p>
           <div class="auth-art-scene">${this.heroScene()}</div>
-          <ul class="auth-art-list"><li>${icon('users', 'sm')} 4–15 oyunçu</li><li>💬 Çat və səsvermə</li><li>🏆 Xal, reytinq və mükafatlar</li></ul>
+          <ul class="auth-art-list"><li>${icon('users', 'sm')} 4–15 oyunçu</li><li>${icon('chat', 'sm')} Çat və səsvermə</li><li>${icon('trophy', 'sm')} Xal, reytinq və mükafatlar</li></ul>
         </div>
         <div class="auth-panel">
         <div class="auth-lang">${this.flagButton()}</div>
@@ -1712,7 +1712,7 @@ const App = {
         <div class="auth-games">
           <span class="eyebrow">Oyunlar və qaydalar</span>
           <div class="auth-games-row">${Object.keys(RULES_PAGES).map((id) => `
-            <a class="auth-game" href="${rulesUrl(id)}"><span class="auth-game-emoji">${RULES_PAGES[id].emoji}</span><b>${esc(RULES_PAGES[id].name)}</b></a>`).join('')}
+            <a class="auth-game" href="${rulesUrl(id)}"><span class="auth-game-emoji">${icon('mafia')}</span><b>${esc(RULES_PAGES[id].name)}</b></a>`).join('')}
           </div>
         </div>
         </div>

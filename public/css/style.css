@@ -1193,7 +1193,8 @@ button.assign-chip:active { transform: scale(.97); }
 
 /* Giriş ekranı: oyun qaydaları səhifələrinə keçid */
 .auth-games { display: flex; flex-direction: column; gap: 8px; align-items: center; }
-.auth-games-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; width: 100%; }
+.auth-games-row { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; width: 100%; }
+.auth-games-row .auth-game { min-width: 150px; }
 .auth-game {
   display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 10px 6px;
   border-radius: var(--radius-sm); background: var(--card); border: 1px solid var(--line);
@@ -1354,16 +1355,18 @@ body {
   #app:has(.auth) { max-width: none; padding: 0; min-height: 100dvh; }
   .auth { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(420px, 1fr); padding: 0; gap: 0; min-height: 100dvh; align-items: stretch; }
   .auth-art {
-    display: flex; flex-direction: column; justify-content: center; gap: 22px; color: #fff; padding: 56px 64px;
+    display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 22px; color: #fff; padding: 56px 48px;
     background: radial-gradient(700px 400px at 20% 0%, rgba(167, 139, 250, .5), transparent 60%), linear-gradient(150deg, #312e81 0%, #4338ca 55%, #6d28d9 100%);
   }
   .auth-art-brand { display: flex; align-items: center; gap: 12px; font-size: 20px; }
   .auth-art-brand .logo { width: 42px; height: 42px; border-radius: 13px; background: rgba(255, 255, 255, .16); display: grid; place-items: center; }
   .auth-art h2 { font-size: 40px; line-height: 1.12; letter-spacing: -.03em; color: #fff; }
-  .auth-art p { color: rgba(255, 255, 255, .8); font-size: 18px; max-width: 460px; }
+  .auth-art p { color: rgba(255, 255, 255, .8); font-size: 18px; }
+  /* sol panelin məzmunu öz panelinin ortasında, sağdakı forma ilə eyni mərkəz xətti üzərində */
+  .auth-art > * { width: 100%; max-width: 520px; }
   .auth-art-scene { max-width: 520px; }
   .auth-art-scene .vil-scene { aspect-ratio: 1 / .66; box-shadow: 0 24px 60px -24px rgba(0, 0, 0, .55); }
-  .auth-art-list { list-style: none; padding: 0; margin: 0; display: flex; gap: 22px; flex-wrap: wrap; color: rgba(255, 255, 255, .9); font-weight: 600; }
+  .auth-art-list { list-style: none; padding: 0; margin: 0; display: flex; gap: 10px 20px; flex-wrap: wrap; font-size: 15px; color: rgba(255, 255, 255, .9); font-weight: 600; }
   .auth-art-list li { display: inline-flex; align-items: center; gap: 8px; }
   .auth-panel { position: relative; display: flex; flex-direction: column; justify-content: center; gap: 24px; padding: 48px 56px; max-width: 560px; width: 100%; margin: 0 auto; }
   .auth-lang { top: 24px; right: 32px; }
@@ -1911,3 +1914,5 @@ body.night .verdict.spare.on { background: #10321d; }
 .price-group summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; }
 .price-list { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .price-item { display: flex; align-items: center; gap: 10px; }
+
+.auth-game-emoji .ic { width: 26px; height: 26px; color: var(--primary); }
