@@ -1,7 +1,7 @@
 {
-  "name": "Oyun Gecəsi — Mafia, İmposter, Səssiz kino",
-  "short_name": "Oyun Gecəsi",
-  "description": "Telefonda qrup oyunları: Mafia, İmposter, Səssiz kino",
+  "name": "Mafiya Kəndi — Online Mafia kənd oyunu",
+  "short_name": "Mafiya Kəndi",
+  "description": "Online kənd oyunu (Mafia): çat, səsvermə, rollar",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f4f5f8",

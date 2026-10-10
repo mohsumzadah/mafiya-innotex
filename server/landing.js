@@ -2,7 +2,7 @@
 // Tətbiqin özü (/) JavaScript-lə işləyir; bu səhifələr isə serverdə hazır HTML kimi verilir ki, Google oxuya bilsin.
 const { SITE, GAMES, LANGS } = require('./landing-content');
 
-const BASE = `https://${process.env.PG_DOMAIN || 'oyun.innotex.az'}`;
+const BASE = `https://${process.env.PG_DOMAIN || 'mafiya.innotex.az'}`;
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const prefix = (lang) => (lang === 'az' ? '' : `/${lang}`);
 const LANG_NAME = { az: 'AZ', ru: 'RU', en: 'EN' };
@@ -150,8 +150,6 @@ function renderGame(id, lang, alternates) {
     </section>
     <section class="final">
       <a class="cta" href="${playUrl(lang)}">${esc(S.playFree)} →</a>
-      <h3>${esc(S.other)}</h3>
-      <div class="cards small">${Object.keys(GAMES).filter((x) => x !== id).map((x) => `<a class="card" href="${gamePath(x, lang)}"><span class="emoji">${GAMES[x].emoji}</span><b>${esc(GAMES[x][lang].name)}</b></a>`).join('')}</div>
     </section>
   </main>
   ${footer(lang)}
@@ -191,6 +189,9 @@ function mount(app) {
       res.type('html').send(html);
     });
   }
+  // Köhnə oyun səhifələri yeni Mafiya səhifəsinə yönləndirilir
+  const OLD = { '/kend': '/mafiya', '/mafia': '/mafiya', '/imposter': '/mafiya', '/sessiz-kino': '/mafiya', '/ru/derevnya': '/ru/mafiya', '/ru/mafia': '/ru/mafiya', '/ru/imposter': '/ru/mafiya', '/ru/krokodil': '/ru/mafiya', '/en/village': '/en/mafia', '/en/imposter': '/en/mafia', '/en/charades': '/en/mafia' };
+  for (const [from, to] of Object.entries(OLD)) app.get(from, (_req, res) => res.redirect(301, to));
   app.get('/sitemap.xml', (_req, res) => res.type('application/xml').send(sitemap()));
   app.get('/robots.txt', (_req, res) => res.type('text/plain').send(ROBOTS));
   return [...cache.keys()];

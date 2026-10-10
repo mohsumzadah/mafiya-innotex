@@ -12,13 +12,24 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=traefik-public"
+      # Əsas domen (PG_DOMAIN), www və (varsa) köhnə domen: http -> https
       - "traefik.http.routers.partygames-http.entrypoints=http"
       - "traefik.http.routers.partygames-http.middlewares=https-redirect@docker"
-      - "traefik.http.routers.partygames-http.rule=Host(`${PG_DOMAIN}`)"
+      - "traefik.http.routers.partygames-http.rule=Host(`${PG_DOMAIN}`) || Host(`www.${PG_DOMAIN}`) || Host(`${PG_OLD_DOMAIN:-old.invalid}`)"
+      # Əsas domen: oyunun özü
       - "traefik.http.routers.partygames-https.entrypoints=https"
       - "traefik.http.routers.partygames-https.rule=Host(`${PG_DOMAIN}`)"
       - "traefik.http.routers.partygames-https.tls=true"
       - "traefik.http.routers.partygames-https.tls.certresolver=le"
+      # www və köhnə domen: həmişə əsas domenə (301) yönləndirilir
+      - "traefik.http.routers.partygames-alias.entrypoints=https"
+      - "traefik.http.routers.partygames-alias.rule=Host(`www.${PG_DOMAIN}`) || Host(`${PG_OLD_DOMAIN:-old.invalid}`)"
+      - "traefik.http.routers.partygames-alias.tls=true"
+      - "traefik.http.routers.partygames-alias.tls.certresolver=le"
+      - "traefik.http.routers.partygames-alias.middlewares=partygames-tomain"
+      - "traefik.http.middlewares.partygames-tomain.redirectregex.regex=^https?://[^/]+/?(.*)"
+      - "traefik.http.middlewares.partygames-tomain.redirectregex.replacement=https://${PG_DOMAIN}/$${1}"
+      - "traefik.http.middlewares.partygames-tomain.redirectregex.permanent=true"
       - "traefik.http.services.partygames.loadbalancer.server.port=3000"
     restart: always
 

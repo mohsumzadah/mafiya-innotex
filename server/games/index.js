@@ -14,7 +14,7 @@
 // state.deadline (ms timestamp) təyin olunubsa, otaq meneceri həmin vaxt timeout() çağırır.
 // state.finished = true olduqda oyun bitmiş sayılır və nəticə bazaya yazılır.
 
-const games = [require('./mafia'), require('./imposter'), require('./charades')];
+const games = [require('./village')];
 
 // Hazırlanan oyunlar ana ekranda "Tezliklə" kimi görünür
 const comingSoon = [];

@@ -174,6 +174,54 @@ const migrations = [
       updated_at INTEGER NOT NULL
     );
   `),
+  () => db.exec(`
+    -- Dəvət: kim dəvət edib və bonus ödənilibmi
+    ALTER TABLE users ADD COLUMN referred_by INTEGER;
+    ALTER TABLE users ADD COLUMN ref_paid INTEGER NOT NULL DEFAULT 0;
+  `),
+  () => db.exec(`
+    -- Dostluq və şəxsi mesajlar
+    ALTER TABLE users ADD COLUMN invisible INTEGER NOT NULL DEFAULT 0;
+    CREATE TABLE friends (
+      a INTEGER NOT NULL,          -- kiçik id
+      b INTEGER NOT NULL,          -- böyük id
+      status TEXT NOT NULL,        -- pending | accepted
+      requester INTEGER NOT NULL,
+      created_at INTEGER NOT NULL,
+      PRIMARY KEY (a, b)
+    );
+    CREATE INDEX friends_b ON friends(b);
+    CREATE TABLE dms (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      from_id INTEGER NOT NULL,
+      to_id INTEGER NOT NULL,
+      text TEXT NOT NULL,
+      created_at INTEGER NOT NULL,
+      read_at INTEGER
+    );
+    CREATE INDEX dms_pair ON dms(from_id, to_id, id);
+    CREATE INDEX dms_unread ON dms(to_id, read_at);
+  `),
+  () => db.exec(`
+    -- İnno sifarişləri: sorğu -> ödəniş linki (Telegram) -> "ödədim" -> təsdiq -> inno hesaba yazılır
+    CREATE TABLE inno_orders (
+      id          INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id     INTEGER NOT NULL,
+      inno        INTEGER NOT NULL,
+      price       REAL NOT NULL,
+      starter     INTEGER NOT NULL DEFAULT 0,
+      status      TEXT NOT NULL,      -- requested | link_sent | claimed | paid | cancelled
+      provider    TEXT NOT NULL DEFAULT 'manual',
+      pay_link    TEXT,
+      tg_msg_id   INTEGER,            -- sorğu mesajı (admin buna Reply ilə link yazır)
+      tg_claim_id INTEGER,            -- "ödədim" mesajı (təsdiq düymələri)
+      created_at  INTEGER NOT NULL,
+      updated_at  INTEGER NOT NULL,
+      paid_at     INTEGER
+    );
+    CREATE INDEX inno_orders_user ON inno_orders(user_id, id);
+    CREATE INDEX inno_orders_msg ON inno_orders(tg_msg_id);
+  `),
 ];
 
 // Reytinq ayı Bakı vaxtı ilə (UTC+4, yay vaxtı yoxdur)
@@ -200,6 +248,10 @@ const q = {
   deleteUser: db.prepare('DELETE FROM users WHERE id = ?'),
   setPassword: db.prepare('UPDATE users SET password_hash = ? WHERE id = ?'),
   upgradeGuest: db.prepare('UPDATE users SET nickname = ?, password_hash = ? WHERE id = ? AND password_hash IS NULL'),
+  setReferrer: db.prepare('UPDATE users SET referred_by = ? WHERE id = ?'),
+  refPaidCount: db.prepare('SELECT COUNT(*) AS n FROM users WHERE referred_by = ? AND ref_paid = 1'),
+  markRefPaid: db.prepare('UPDATE users SET ref_paid = ? WHERE id = ?'),
+  addCoins: db.prepare('UPDATE users SET coins = coins + ? WHERE id = ?'),
   touchUser: db.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?'),
   addReward: db.prepare('UPDATE users SET points = points + ?, coins = coins + ? WHERE id = ?'),
   insertScore: db.prepare(`INSERT INTO score_events (user_id, game_id, points, coins, won, month, created_at)
@@ -269,6 +321,7 @@ function publicUser(row) {
     coins: row.coins,
     look: shop.lookView(parseLook(row.look)),
     hasPassword: !!row.password_hash,
+    ref: { code: refCode(row.id), count: q.refPaidCount.get(row.id).n, ...shop.REFERRAL },
   };
 }
 
@@ -297,7 +350,14 @@ function newSession(userId) {
 
 // Nickname boşdursa (və ya köhnə tərk edilmiş qonaq hesabınındırsa) yeni hesab yaradır.
 // password verilməsə qonaq hesabıdır. Nickname tutulubsa null qaytarır.
-const createUser = db.transaction(({ nickname, password }) => {
+// Dəvət kodu: istifadəçi nömrəsinin 36-lıq yazılışı (sabit və qısa)
+const refCode = (id) => Number(id).toString(36);
+const decodeRef = (code) => {
+  const c = String(code || '').toLowerCase();
+  return /^[0-9a-z]{1,8}$/.test(c) ? parseInt(c, 36) : 0;
+};
+
+const createUser = db.transaction(({ nickname, password, ref }) => {
   const existing = q.userByNickname.get(nickname);
   if (existing) {
     if (!isAbandoned(existing)) return null;
@@ -307,6 +367,8 @@ const createUser = db.transaction(({ nickname, password }) => {
   const hash = password ? hashPassword(password) : null;
   const { lastInsertRowid } = q.insertUser.run(nickname, hash, now, now);
   const id = Number(lastInsertRowid);
+  const inviter = decodeRef(ref);
+  if (inviter && inviter !== id && q.userById.get(inviter)) q.setReferrer.run(inviter, id);
   return { token: newSession(id), user: publicUser(q.userById.get(id)) };
 });
 
@@ -401,8 +463,23 @@ const saveResult = db.transaction(({ roomCode, gameId, winner, players, rewards 
     if (!q.userById.get(id)) continue; // oyun zamanı hesabını silən qonaq
     q.addReward.run(r.points, r.coins, id);
     q.insertScore.run(id, gameId, r.points, r.coins, r.won ? 1 : 0, month, now);
+    payReferral(id, players);
   }
 });
+
+// Dəvət olunan oyunçu ilk oyununu (ən azı 3 nəfərlik) bitirəndə dəvət edən və özü inno alır.
+// ref_paid: 0 = gözləyir, 1 = ödənildi, 2 = ödənmədi (dəvət edənin limiti dolub)
+function payReferral(userId, players) {
+  const row = q.userById.get(userId);
+  if (!row || !row.referred_by || row.ref_paid) return;
+  if (!Array.isArray(players) || players.length < 3) return;
+  const inviter = q.userById.get(row.referred_by);
+  if (!inviter) return q.markRefPaid.run(2, userId);
+  if (q.refPaidCount.get(inviter.id).n >= shop.REFERRAL.max) return q.markRefPaid.run(2, userId);
+  q.addCoins.run(shop.REFERRAL.inviter, inviter.id);
+  q.addCoins.run(shop.REFERRAL.invitee, userId);
+  q.markRefPaid.run(1, userId);
+}
 
 // ---------- Reytinq ----------
 
@@ -467,6 +544,18 @@ function publicStats() {
 }
 
 // itemId null olsa həmin növü çıxarır
+// Pulsuz personaj redaktoru: look.char = { skin, hair, hairColor, shirt }
+function setChar(userId, char) {
+  const c = shop.cleanChar(char);
+  if (!c) return 'Düzgün seçim deyil';
+  const row = q.userById.get(userId);
+  const look = parseLook(row.look);
+  look.char = c;
+  q.setLook.run(JSON.stringify(look), userId);
+  lookCache.delete(userId);
+  return null;
+}
+
 function equip(userId, type, itemId) {
   if (!shop.TYPES.some((t) => t.id === type)) return 'Belə növ yoxdur';
   const row = q.userById.get(userId);
@@ -529,6 +618,85 @@ let rewardsCache = null;
 const clampReward = (n) => Math.max(0, Math.min(100000, Math.trunc(Number(n)) || 0));
 
 // { win: { points, coins }, lose: { points, coins } }
+// ---------- Qiymətlər (admin paneldən dəyişir) ----------
+// Əşya, inno paketi, başlanğıc paketi və reklam qiymətləri settings cədvəlində saxlanılır və shop obyektlərinin üzərinə tətbiq olunur.
+const defaultPrices = {
+  items: Object.fromEntries(shop.ITEMS.map((i) => [i.id, i.price])),
+  packs: shop.INNO_PACKS.map((p) => ({ ...p })),
+  starter: { ...shop.STARTER_PACK },
+  ads: Object.fromEntries(shop.AD_PLANS.map((p) => [p.id, p.price])),
+};
+function applyPrices(v) {
+  for (const i of shop.ITEMS) if (v.items && Number.isInteger(v.items[i.id])) i.price = v.items[i.id];
+  (v.packs || []).forEach((p, idx) => { if (shop.INNO_PACKS[idx] && p) { shop.INNO_PACKS[idx].inno = p.inno; shop.INNO_PACKS[idx].price = p.price; } });
+  if (v.starter) { shop.STARTER_PACK.inno = v.starter.inno; shop.STARTER_PACK.price = v.starter.price; }
+  for (const p of shop.AD_PLANS) if (v.ads && Number.isInteger(v.ads[p.id])) p.price = v.ads[p.id];
+}
+function currentPrices() {
+  return {
+    items: Object.fromEntries(shop.ITEMS.map((i) => [i.id, i.price])),
+    packs: shop.INNO_PACKS.map((p) => ({ inno: p.inno, price: p.price })),
+    starter: { inno: shop.STARTER_PACK.inno, price: shop.STARTER_PACK.price },
+    ads: Object.fromEntries(shop.AD_PLANS.map((p) => [p.id, p.price])),
+  };
+}
+function getPrices() {
+  const cur = currentPrices();
+  const d = defaultPrices;
+  return {
+    types: shop.TYPES,
+    items: shop.ITEMS.map((i) => ({ id: i.id, type: i.type, name: i.name, price: cur.items[i.id], def: d.items[i.id] })),
+    packs: cur.packs.map((p, idx) => ({ ...p, defInno: d.packs[idx].inno, defPrice: d.packs[idx].price })),
+    starter: { ...cur.starter, defInno: d.starter.inno, defPrice: d.starter.price },
+    ads: shop.AD_PLANS.map((p) => ({ id: p.id, days: p.days, price: cur.ads[p.id], def: d.ads[p.id] })),
+  };
+}
+function setPrices(b) {
+  const int = (n, max) => (Number.isInteger(n) && n >= 1 && n <= max ? n : null);
+  const money = (n) => (typeof n === 'number' && isFinite(n) && n >= 0.01 && n <= 10000 ? Math.round(n * 100) / 100 : null);
+  const cur = currentPrices();
+  const next = { items: { ...cur.items }, packs: cur.packs.map((p) => ({ ...p })), starter: { ...cur.starter }, ads: { ...cur.ads } };
+  for (const [id, raw] of Object.entries(b.items || {})) {
+    if (!(id in next.items)) continue;
+    const n = int(Number(raw), 100000);
+    if (n == null) return { error: `Əşya qiyməti düzgün deyil: ${shop.byId.get(id).name}` };
+    next.items[id] = n;
+  }
+  if (Array.isArray(b.packs)) {
+    for (let idx = 0; idx < next.packs.length; idx++) {
+      const p = b.packs[idx];
+      if (!p) continue;
+      const inno = int(Number(p.inno), 1000000); const price = money(Number(p.price));
+      if (inno == null || price == null) return { error: `${idx + 1}-ci inno paketinin məlumatı düzgün deyil` };
+      next.packs[idx] = { inno, price };
+    }
+  }
+  if (b.starter) {
+    const inno = int(Number(b.starter.inno), 1000000); const price = money(Number(b.starter.price));
+    if (inno == null || price == null) return { error: 'Başlanğıc paketinin məlumatı düzgün deyil' };
+    next.starter = { inno, price };
+  }
+  for (const [id, raw] of Object.entries(b.ads || {})) {
+    if (!(id in next.ads)) continue;
+    const n = int(Number(raw), 100000);
+    if (n == null) return { error: 'Reklam qiyməti düzgün deyil' };
+    next.ads[id] = n;
+  }
+  db.prepare(`INSERT INTO settings (key, value, updated_at) VALUES ('prices', ?, ?)
+              ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`).run(JSON.stringify(next), Date.now());
+  applyPrices(next);
+  return { prices: getPrices() };
+}
+function resetPrices() {
+  db.prepare("DELETE FROM settings WHERE key = 'prices'").run();
+  applyPrices(defaultPrices);
+  return getPrices();
+}
+(() => {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'prices'").get();
+  try { if (row) applyPrices(JSON.parse(row.value)); } catch (e) { console.error('prices:', e.message); }
+})();
+
 function getRewards() {
   if (!rewardsCache) {
     const row = db.prepare("SELECT value FROM settings WHERE key = 'rewards'").get();
@@ -797,13 +965,203 @@ function lookOf(userId) {
   return lookCache.get(userId);
 }
 
+// ---------- Dostluq və şəxsi mesajlar ----------
+
+const pair = (x, y) => (x < y ? [x, y] : [y, x]);
+const friendRow = (x, y) => { const [a, b] = pair(x, y); return db.prepare('SELECT * FROM friends WHERE a = ? AND b = ?').get(a, b); };
+const isRegistered = (id) => { const r = q.userById.get(id); return !!(r && r.password_hash); };
+
+function friendStatus(viewerId, otherId) {
+  if (viewerId === otherId) return 'self';
+  const f = friendRow(viewerId, otherId);
+  if (!f) return 'none';
+  if (f.status === 'accepted') return 'friends';
+  return f.requester === viewerId ? 'sent' : 'received';
+}
+
+// Digər oyunçunun profili (oyundan nickə basanda)
+function profileOf(viewerId, targetId) {
+  const row = q.userById.get(targetId);
+  if (!row) return null;
+  const st = db.prepare('SELECT COALESCE(SUM(won),0) AS wins, COUNT(*) AS games FROM score_events WHERE user_id = ? AND game_id NOT IN (\'seed\', \'admin\')').get(targetId);
+  return {
+    id: row.id, nickname: row.nickname, look: shop.lookView(parseLook(row.look)), points: row.points,
+    wins: st.wins, games: st.games, registered: !!row.password_hash, status: friendStatus(viewerId, targetId),
+  };
+}
+
+// Uğurlu olsa { status }, olmasa { error }
+function friendRequest(fromId, toId) {
+  if (fromId === toId) return { error: 'Özünə dostluq göndərə bilməzsən' };
+  if (!isRegistered(fromId)) return { error: 'needs-account' };
+  const target = q.userById.get(toId);
+  if (!target) return { error: 'Oyunçu tapılmadı' };
+  if (!target.password_hash) return { error: 'Bu oyunçu qonaqdır (hesabı yoxdur), dostluq göndərmək olmur' };
+  const f = friendRow(fromId, toId);
+  const [a, b] = pair(fromId, toId);
+  if (f && f.status === 'accepted') return { error: 'Artıq dostsunuz' };
+  if (f && f.requester === fromId) return { error: 'Sorğu artıq göndərilib' };
+  if (f) { // qarşı tərəf əvvəl göndəribsə, birbaşa qəbul olunur
+    db.prepare("UPDATE friends SET status = 'accepted' WHERE a = ? AND b = ?").run(a, b);
+    return { status: 'friends' };
+  }
+  const n = db.prepare("SELECT COUNT(*) AS n FROM friends WHERE requester = ? AND status = 'pending'").get(fromId).n;
+  if (n >= 30) return { error: 'Çox gözləyən sorğun var, bir az gözlə' };
+  db.prepare("INSERT INTO friends (a, b, status, requester, created_at) VALUES (?, ?, 'pending', ?, ?)").run(a, b, fromId, Date.now());
+  return { status: 'sent' };
+}
+
+function friendRespond(userId, otherId, accept) {
+  const f = friendRow(userId, otherId);
+  if (!f || f.status !== 'pending' || f.requester === userId) return { error: 'Sorğu tapılmadı' };
+  const [a, b] = pair(userId, otherId);
+  if (accept) db.prepare("UPDATE friends SET status = 'accepted' WHERE a = ? AND b = ?").run(a, b);
+  else db.prepare('DELETE FROM friends WHERE a = ? AND b = ?').run(a, b);
+  return { status: accept ? 'friends' : 'none' };
+}
+
+function friendRemove(userId, otherId) {
+  const [a, b] = pair(userId, otherId);
+  db.prepare('DELETE FROM friends WHERE a = ? AND b = ?').run(a, b);
+  return { status: 'none' };
+}
+
+const friendIds = (userId) => db.prepare("SELECT CASE WHEN a = ? THEN b ELSE a END AS id FROM friends WHERE status = 'accepted' AND (a = ? OR b = ?)").all(userId, userId, userId).map((r) => r.id);
+
+// Dostlar, gələn və göndərilən sorğular, oxunmamış mesajlar
+function socialOverview(userId) {
+  const rows = db.prepare('SELECT * FROM friends WHERE a = ? OR b = ?').all(userId, userId);
+  const info = (id) => { const r = q.userById.get(id); return r ? { id, nickname: r.nickname, look: shop.lookView(parseLook(r.look)), invisible: !!r.invisible } : null; };
+  const unread = new Map(db.prepare('SELECT from_id, COUNT(*) AS n FROM dms WHERE to_id = ? AND read_at IS NULL GROUP BY from_id').all(userId).map((r) => [r.from_id, r.n]));
+  const last = (id) => db.prepare('SELECT text, from_id, created_at FROM dms WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?) ORDER BY id DESC LIMIT 1').get(userId, id, id, userId);
+  const friends = [], incoming = [], outgoing = [];
+  for (const r of rows) {
+    const other = r.a === userId ? r.b : r.a;
+    const u = info(other);
+    if (!u) continue;
+    if (r.status === 'accepted') friends.push({ ...u, unread: unread.get(other) || 0, last: last(other) || null });
+    else if (r.requester === userId) outgoing.push(u);
+    else incoming.push(u);
+  }
+  return { friends, incoming, outgoing, unread: [...unread.values()].reduce((x, y) => x + y, 0), invisible: !!(q.userById.get(userId) || {}).invisible };
+}
+
+function dmSend(fromId, toId, text) {
+  if (!isRegistered(fromId)) return { error: 'needs-account' };
+  const f = friendRow(fromId, toId);
+  if (!f || f.status !== 'accepted') return { error: 'Mesaj yazmaq üçün dost olmalısınız' };
+  const now = Date.now();
+  const lastMsg = db.prepare('SELECT created_at FROM dms WHERE from_id = ? ORDER BY id DESC LIMIT 1').get(fromId);
+  if (lastMsg && now - lastMsg.created_at < 500) return { error: 'Bir az yavaş yaz' };
+  const id = Number(db.prepare('INSERT INTO dms (from_id, to_id, text, created_at) VALUES (?, ?, ?, ?)').run(fromId, toId, text, now).lastInsertRowid);
+  return { message: { id, from: fromId, to: toId, text, at: now } };
+}
+
+// Söhbət tarixçəsi (son 80) və oxunmuş kimi işarələ
+function dmHistory(userId, otherId) {
+  const f = friendRow(userId, otherId);
+  if (!f || f.status !== 'accepted') return { error: 'Bu oyunçu dostun deyil' };
+  db.prepare('UPDATE dms SET read_at = ? WHERE to_id = ? AND from_id = ? AND read_at IS NULL').run(Date.now(), userId, otherId);
+  const rows = db.prepare('SELECT * FROM dms WHERE (from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?) ORDER BY id DESC LIMIT 80').all(userId, otherId, otherId, userId).reverse();
+  return { messages: rows.map((m) => ({ id: m.id, from: m.from_id, text: m.text, at: m.created_at })) };
+}
+
+function searchUsers(viewerId, text, withBots = false) {
+  const t = String(text || '').trim().slice(0, 20);
+  if (t.length < 2) return [];
+  const rows = db.prepare("SELECT id, nickname, look FROM users WHERE password_hash IS NOT NULL AND id != ? AND nickname LIKE ? ESCAPE '\\' ORDER BY length(nickname), nickname LIMIT 8").all(viewerId, `${t.replace(/[%_\\]/g, '\\$&')}%`);
+  return rows.filter((r) => withBots || !/_bot$/.test(r.nickname)).map((r) => ({ id: r.id, nickname: r.nickname, look: shop.lookView(parseLook(r.look)), status: friendStatus(viewerId, r.id) }));
+}
+
+// Test rejimi botları: real hesablardır (nickname _bot ilə bitir), dostluq və mesajlaşmanı sınamaq üçün
+function ensureBot(name) {
+  const nick = `${name}_bot`;
+  const row = q.userByNickname.get(nick);
+  if (row) return { id: row.id, nickname: row.nickname };
+  const id = Number(q.insertUser.run(nick, hashPassword(crypto.randomBytes(12).toString('hex')), Date.now(), null).lastInsertRowid);
+  return { id, nickname: nick };
+}
+function isBot(userId) {
+  const r = q.userById.get(userId);
+  return !!(r && /_bot$/.test(r.nickname) && r.password_hash);
+}
+
+function setInvisible(userId, on) {
+  db.prepare('UPDATE users SET invisible = ? WHERE id = ?').run(on ? 1 : 0, userId);
+}
+const isInvisible = (userId) => !!(q.userById.get(userId) || {}).invisible;
+
+
+// ---------- İnno sifarişləri ----------
+
+const OPEN_ORDER = ['requested', 'link_sent', 'claimed'];
+const orderRow = (r) => r && ({
+  id: r.id, userId: r.user_id, inno: r.inno, price: r.price, starter: !!r.starter, status: r.status, provider: r.provider,
+  payLink: r.pay_link, tgMsgId: r.tg_msg_id, tgClaimId: r.tg_claim_id, createdAt: r.created_at, paidAt: r.paid_at,
+});
+
+function nicknameOf(userId) {
+  const r = q.userById.get(userId);
+  return r ? r.nickname : null;
+}
+function innoOrder(id) {
+  return orderRow(db.prepare('SELECT * FROM inno_orders WHERE id = ?').get(id));
+}
+function innoOrderByMsg(msgId) {
+  return orderRow(db.prepare('SELECT * FROM inno_orders WHERE tg_msg_id = ? OR tg_claim_id = ?').get(msgId, msgId));
+}
+function innoOrdersOf(userId, limit = 5) {
+  return db.prepare('SELECT * FROM inno_orders WHERE user_id = ? ORDER BY id DESC LIMIT ?').all(userId, limit).map(orderRow);
+}
+// Yeni sifariş: eyni vaxtda ən çox 2 açıq sifariş; başlanğıc paketi yalnız bir dəfə
+function createInnoOrder(userId, inno, price, starter) {
+  return db.transaction(() => {
+    const open = db.prepare(`SELECT COUNT(*) AS n FROM inno_orders WHERE user_id = ? AND status IN ('requested','link_sent','claimed')`).get(userId).n;
+    if (open >= 2) return { error: 'Açıq sifarişin var. Əvvəlcə onu tamamla və ya ləğv et' };
+    if (starter) {
+      const used = db.prepare(`SELECT COUNT(*) AS n FROM inno_orders WHERE user_id = ? AND starter = 1 AND status != 'cancelled'`).get(userId).n;
+      if (used) return { error: 'Başlanğıc paketi yalnız bir dəfə alınır' };
+    }
+    const now = Date.now();
+    const r = db.prepare(`INSERT INTO inno_orders (user_id, inno, price, starter, status, created_at, updated_at) VALUES (?, ?, ?, ?, 'requested', ?, ?)`)
+      .run(userId, inno, price, starter ? 1 : 0, now, now);
+    return { order: innoOrder(r.lastInsertRowid) };
+  })();
+}
+function updateInnoOrder(id, fields) {
+  const map = { status: 'status', payLink: 'pay_link', tgMsgId: 'tg_msg_id', tgClaimId: 'tg_claim_id' };
+  const sets = []; const vals = [];
+  for (const [k, col] of Object.entries(map)) if (k in fields) { sets.push(`${col} = ?`); vals.push(fields[k]); }
+  db.prepare(`UPDATE inno_orders SET ${sets.join(', ')}, updated_at = ? WHERE id = ?`).run(...vals, Date.now(), id);
+}
+// Ödəniş təsdiqi: inno yalnız bir dəfə yazılır (açıq sifariş -> paid, eyni transaksiyada balans artır)
+const confirmInnoOrder = db.transaction((id) => {
+  const o = innoOrder(id);
+  if (!o) return { error: 'Sifariş tapılmadı' };
+  if (!OPEN_ORDER.includes(o.status)) return { error: o.status === 'paid' ? 'Bu sifariş artıq təsdiqlənib' : 'Sifariş ləğv olunub' };
+  if (!q.userById.get(o.userId)) return { error: 'Hesab silinib' };
+  const now = Date.now();
+  db.prepare(`UPDATE inno_orders SET status = 'paid', paid_at = ?, updated_at = ? WHERE id = ?`).run(now, now, id);
+  db.prepare('UPDATE users SET coins = coins + ? WHERE id = ?').run(o.inno, o.userId);
+  return { order: innoOrder(id) };
+});
+function cancelInnoOrder(id, userId) {
+  const o = innoOrder(id);
+  if (!o || (userId != null && o.userId !== userId)) return { error: 'Sifariş tapılmadı' };
+  if (!['requested', 'link_sent'].includes(o.status)) return { error: 'Bu mərhələdə ləğv etmək olmaz' };
+  updateInnoOrder(id, { status: 'cancelled' });
+  return { order: innoOrder(id) };
+}
+
 module.exports = {
+  profileOf, searchUsers, ensureBot, isBot, friendRequest, friendRespond, friendRemove, friendIds, socialOverview, dmSend, dmHistory, setInvisible, isInvisible, friendStatus,
   createUser, login, logout, setPassword, userByToken, nicknameStatus, upgradeGuest,
   saveRoom, deleteRoom, loadRooms, saveResult,
-  leaderboard, ownedItems, buyItem, equip, lookOf, monthKey,
+  leaderboard, ownedItems, buyItem, equip, setChar, lookOf, monthKey,
   activeAds, myAd, createAd, stopAd, claimDaily, publicStats,
-  getRewards, setRewards, getPrizes, setPrizes, runMonthlyPrizes, awardMonth, lastPrizeWinners, prevMonthKey,
+  getPrices, setPrices, resetPrices, getRewards, setRewards, getPrizes, setPrizes, runMonthlyPrizes, awardMonth, lastPrizeWinners, prevMonthKey,
   adminStats, adminUsers, adminDeleteSeed,
+  nicknameOf, innoOrder, innoOrderByMsg, innoOrdersOf, createInnoOrder, updateInnoOrder, confirmInnoOrder, cancelInnoOrder,
   FEEDBACK_KINDS, addFeedback, adminFeedback, setFeedbackStatus, deleteFeedback,
   publicReviews, upsertReview, deleteOwnReview, adminReviews, setReviewHidden, deleteReview, adminAddCoins, adminDeleteUser, adminAds, adminCreateUser, adminUpdateUser,
 };

@@ -2,11 +2,20 @@ const crypto = require('crypto');
 const db = require('./db');
 const games = require('./games');
 const { UserError } = require('./errors');
+const { findProfanity } = require('./profanity');
 
+
+const ROOM_LANGS = ['az', 'ru', 'en'];
+const normLangs = (arr, fallback = ['az']) => {
+  const list = (Array.isArray(arr) ? arr : []).filter((l, i, a) => ROOM_LANGS.includes(l) && a.indexOf(l) === i);
+  return list.length ? ROOM_LANGS.filter((l) => list.includes(l)) : fallback;
+};
 
 const ROOM_TTL = 6 * 3600 * 1000; // bu qədər aktivlik olmayan otaq silinir
 const EMPTY_ROOM_TTL = 30 * 60 * 1000; // heç kim onlayn deyilsə
 const FINISHED_ROOM_TTL = 5 * 60 * 1000; // oyun bitəndən sonra yeni oyun başlamasa otaq bağlanır
+const AUTO_START_MS = 25 * 1000; // açıq otaqda minimum say yığılandan sonra avtomatik başlama
+const AUTO_START_FULL_MS = 4 * 1000; // otaq dolanda
 
 class RoomManager {
   constructor(io, isOnline) {
@@ -16,13 +25,15 @@ class RoomManager {
     this.byUser = new Map(); // userId -> code
     this.timers = new Map(); // code -> timeout
     this.closeTimers = new Map(); // code -> bağlanma taymeri
+    this.autoTimers = new Map(); // code -> avtomatik başlama taymeri
+    this.botTimers = new Map(); // code -> test botlarının taymeri
   }
 
   // Server başlayanda aktiv otaqları bazadan geri yüklə və taymerləri bərpa et
   restore() {
     const now = Date.now();
     for (const room of db.loadRooms()) {
-      if (now - room.updatedAt > ROOM_TTL || !games.get(room.gameId)) {
+      if (now - room.updatedAt > ROOM_TTL || !games.get(room.gameId) || room.test) {
         db.deleteRoom(room.code);
         continue;
       }
@@ -32,6 +43,7 @@ class RoomManager {
       for (const p of room.players) this.byUser.set(p.id, room.code);
       this.schedule(room);
       this.scheduleClose(room);
+      this.scheduleAuto(room);
     }
     setInterval(() => this.cleanup(), 5 * 60 * 1000).unref();
     return this.rooms.size;
@@ -64,15 +76,25 @@ class RoomManager {
 
   // ---------- Otaq əməliyyatları ----------
 
-  create(user, gameId) {
+  hashPass(code, pw) {
+    return crypto.createHash('sha256').update(`pg:${code}:${pw}`).digest('hex');
+  }
+
+  create(user, gameId, visibility = 'private', opts = {}) {
     const game = games.get(gameId);
     if (!game) throw new UserError('Belə oyun yoxdur');
+    const name = String(opts.name ?? '').trim().replace(/\s+/g, ' ').slice(0, 24);
+    if (name && findProfanity(name)) throw new UserError('Otaq adı uyğun deyil');
+    const pw = String(opts.password ?? '').slice(0, 30);
     this.leave(user);
     const now = Date.now();
     const room = {
       code: this.newCode(),
+      name,
       gameId,
       hostId: user.id,
+      visibility: visibility === 'public' ? 'public' : 'private',
+      langs: normLangs(opts.langs, [ROOM_LANGS.includes(opts.lang) ? opts.lang : 'az']), // otaqda danışılan dillər
       status: 'lobby', // lobby | playing | finished
       players: [{ id: user.id, nickname: user.nickname }],
       settings: games.defaultSettings(game),
@@ -81,13 +103,168 @@ class RoomManager {
       updatedAt: now,
       startedAt: null,
     };
+    if (pw) room.passHash = this.hashPass(room.code, pw);
     this.rooms.set(room.code, room);
     this.byUser.set(user.id, room.code);
     this.commit(room);
     return { code: room.code };
   }
 
-  join(user, rawCode) {
+  // ---------- Test rejimi (yalnız admin): botlarla oyun ----------
+
+  createTest(user, wantRole) {
+    if (!user.isAdmin) throw new UserError('Test rejimi yalnız admin üçündür');
+    const game = games.get('village');
+    this.leave(user);
+    const NAMES = ['Aysel', 'Rəşad', 'Nigar', 'Elnur', 'Leyla', 'Tural'];
+    const bots = NAMES.map((n) => db.ensureBot(n));
+    const now = Date.now();
+    const room = {
+      code: this.newCode(),
+      name: '🧪 Test',
+      gameId: 'village',
+      hostId: user.id,
+      visibility: 'private',
+      test: true,
+      testAuto: false,
+      status: 'lobby',
+      players: [{ id: user.id, nickname: user.nickname }, ...bots.map((b) => ({ id: b.id, nickname: b.nickname, bot: true }))],
+      settings: { ...games.defaultSettings(game), discussionSec: '60' },
+      state: null,
+      createdAt: now,
+      updatedAt: now,
+      startedAt: now,
+    };
+    this.rooms.set(room.code, room);
+    this.byUser.set(user.id, room.code);
+    const alerts = [];
+    room.state = game.setup(room.players, room.settings, this.ctx(room, user.id, alerts));
+    const s = room.state;
+    s.settings.testGod = true; // test rejimində hamının rolu görünür
+    if (['mafia', 'doctor', 'detective', 'citizen'].includes(wantRole) && s.roles[user.id] !== wantRole) {
+      const other = Object.keys(s.roles).map(Number).find((id) => s.roles[id] === wantRole);
+      if (other != null) [s.roles[user.id], s.roles[other]] = [s.roles[other], s.roles[user.id]];
+    }
+    room.status = 'playing';
+    this.commit(room, alerts);
+    return { code: room.code };
+  }
+
+  toggleTestAuto(user) {
+    const room = this.requireRoom(user);
+    if (!room.test) throw new UserError('Bu otaq test otağı deyil');
+    room.testAuto = !room.testAuto;
+    this.commit(room);
+  }
+
+  // Botlar hər ~1.2 san.-dən bir növbəti addımı atır (test otağında)
+  scheduleBots(room) {
+    const has = this.botTimers.has(room.code);
+    if (!room.test || room.status !== 'playing') {
+      if (has) { clearInterval(this.botTimers.get(room.code)); this.botTimers.delete(room.code); }
+      return;
+    }
+    if (has) return;
+    const t = setInterval(() => this.botTick(room.code), 1200);
+    t.unref();
+    this.botTimers.set(room.code, t);
+  }
+
+  botTick(code) {
+    const room = this.rooms.get(code);
+    if (!room || room.status !== 'playing' || !room.state) return;
+    const game = games.get(room.gameId);
+    const s = room.state;
+    const alerts = [];
+    const ctx = () => this.ctx(room, null, alerts);
+    const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+    const LINES = ['Mənə şübhəli gəlir…', 'Gecə kim səs-küy saldı?', 'Mən vətəndaşam, inanın!', 'Gəlin ehtiyatla səs verək.', 'Kimsə susur, bu qəribədir.', 'Mən kimisə yoxladım, sonra deyəcəm.', 'Bəlkə heç kimi qovmayaq?'];
+    let changed = false;
+    const actors = room.players.filter((p) => p.bot || (room.testAuto && p.id === room.hostId));
+    for (const p of actors) {
+      let v;
+      try { v = game.view(s, p.id); } catch { continue; }
+      const act = (payload) => {
+        try { game.action(s, p.id, payload, ctx()); changed = true; } catch { /* qeyri-mümkün addım: keç */ }
+      };
+      if (s.phase === 'reveal' && !v.seen) act({ type: 'seen' });
+      else if (s.phase === 'night' && v.amAlive && v.options && v.options.length && v.pick == null && Math.random() < 0.6) act({ type: 'target', targetId: pick(v.options) });
+      else if (s.phase === 'discussion' && v.amAlive) {
+        if (p.bot && Math.random() < 0.18) {
+          const others = v.players.filter((x) => x.alive && x.id !== p.id);
+          const line = Math.random() < 0.3 && others.length ? `${(room.players.find((q) => q.id === pick(others).id) || {}).nickname}, sən nə düşünürsən?` : pick(LINES);
+          act({ type: 'chat', text: line });
+        }
+        const ready = v.ready && v.ready[p.id];
+        if (!ready && Math.random() < (p.bot ? 0.05 : 0.15)) act({ type: 'ready' });
+      } else if (s.phase === 'defense' && p.bot && v.accused === p.id && s.__defRound !== s.round) {
+        s.__defRound = s.round;
+        act({ type: 'chat', text: pick(['Mən günahsızam, inanın!', 'Məni asmayın, vətəndaşam!', 'Əsl mafia başqasıdır.']) });
+      } else if (s.phase === 'verdict' && v.amAlive && v.accused !== p.id && !(v.verdicts && p.id in v.verdicts) && Math.random() < 0.5) {
+        act({ type: 'verdict', choice: Math.random() < 0.55 ? 'hang' : 'spare' });
+      } else if (s.phase === 'vote' && v.amAlive && !(v.votes && p.id in v.votes) && Math.random() < 0.5) {
+        const others = v.players.filter((x) => x.alive && x.id !== p.id);
+        act({ type: 'vote', targetId: Math.random() < 0.15 || !others.length ? 'skip' : pick(others).id });
+      }
+      if (s.finished || s.phase === 'over') break;
+    }
+    if (changed) this.commit(room, alerts);
+  }
+
+  // Açıq otaqlar: lobbidə olan, yeri qalan, hamıya açıq otaqlar
+  listPublic() {
+    const out = [];
+    for (const room of this.rooms.values()) {
+      if (room.visibility !== 'public' || room.status !== 'lobby') continue;
+      const game = games.get(room.gameId);
+      if (!game) continue;
+      const host = room.players.find((p) => p.id === room.hostId);
+      out.push({
+        code: room.code,
+        name: room.name || '',
+        locked: !!room.passHash,
+        langs: room.langs || ROOM_LANGS,
+        gameName: game.name,
+        host: host ? host.nickname : '',
+        count: room.players.length,
+        max: game.maxPlayers,
+        min: game.minPlayers,
+        full: room.players.length >= game.maxPlayers,
+        autoStartAt: room.autoStartAt || null,
+      });
+    }
+    return out.sort((a, b) => Number(a.full) - Number(b.full) || b.count - a.count);
+  }
+
+  // Sürətli oyun: ən çox oyunçusu olan açıq otağa qoşul, yoxdursa yenisini aç
+  quick(user, gameId, lang) {
+    const cur = this.roomOf(user.id);
+    if (cur) {
+      this.sendTo(user.id, cur);
+      return { code: cur.code };
+    }
+    // Yalnız oyunçunun dilində danışılan otaqlara qoşulur; yoxdursa həmin dildə yeni otaq açılır
+    const l = ROOM_LANGS.includes(lang) ? lang : 'az';
+    const open = this.listPublic().filter((r) => !r.full && !r.locked && r.langs.includes(l));
+    if (open.length) return this.join(user, open[0].code);
+    return this.create(user, gameId, 'public', { langs: [l] });
+  }
+
+  setVisibility(user, visibility) {
+    const room = this.requireHost(user);
+    if (room.status !== 'lobby') throw new UserError('Bunu yalnız oyundan əvvəl dəyişmək olar');
+    room.visibility = visibility === 'public' ? 'public' : 'private';
+    this.commit(room);
+  }
+
+  setLangs(user, langs) {
+    const room = this.requireHost(user);
+    if (room.status !== 'lobby') throw new UserError('Bunu yalnız oyundan əvvəl dəyişmək olar');
+    room.langs = normLangs(langs, room.langs || ['az']);
+    this.commit(room);
+  }
+
+  join(user, rawCode, password) {
     const code = String(rawCode || '').replace(/\D/g, '');
     const room = this.rooms.get(code);
     if (!room) throw new UserError('Bu kodla otaq tapılmadı');
@@ -96,6 +273,11 @@ class RoomManager {
       return { code };
     }
     if (room.status !== 'lobby') throw new UserError('Bu otaqda oyun artıq başlayıb');
+    if (room.passHash && this.hashPass(code, String(password ?? '')) !== room.passHash) {
+      const err = new UserError(password ? 'Otaq şifrəsi səhvdir' : 'Bu otaq şifrəlidir');
+      err.needsPassword = true;
+      throw err;
+    }
     const game = games.get(room.gameId);
     if (room.players.length >= game.maxPlayers) throw new UserError('Otaq doludur');
 
@@ -126,8 +308,7 @@ class RoomManager {
   removePlayer(room, userId) {
     room.players = room.players.filter((p) => p.id !== userId);
     this.byUser.delete(userId);
-    if (room.assign) delete room.assign[userId];
-    if (room.players.length === 0) return this.close(room);
+    if (room.players.length === 0 || (room.test && room.players.every((p) => p.bot))) return this.close(room);
     if (room.hostId === userId) room.hostId = room.players[0].id;
 
     const alerts = [];
@@ -149,20 +330,6 @@ class RoomManager {
     this.commit(room);
   }
 
-  // Komandalı oyunlarda host lobbidə oyunçunun komandasını dəyişir (toxunduqca növbəti komanda)
-  assign(user, targetId) {
-    const room = this.requireHost(user);
-    if (room.status !== 'lobby') throw new UserError('Ayarları yalnız oyundan əvvəl dəyişmək olar');
-    const game = games.get(room.gameId);
-    if (!game.lobbyTeams) throw new UserError('Bu hərəkət indi mümkün deyil');
-    targetId = Number(targetId);
-    if (!room.players.some((p) => p.id === targetId)) throw new UserError('Bu oyunçu otaqda deyil');
-    const n = Number(room.settings.teams) || 2;
-    room.assign = room.assign || {};
-    room.assign[targetId] = ((room.assign[targetId] ?? -1) + 1) % n;
-    this.commit(room);
-  }
-
   start(user) {
     const room = this.requireHost(user);
     if (room.status !== 'lobby') throw new UserError('Oyun artıq başlayıb');
@@ -177,6 +344,7 @@ class RoomManager {
     room.resultSaved = false;
     room.rewards = null;
     room.closesAt = null;
+    room.autoStartAt = null;
     this.commit(room, alerts);
   }
 
@@ -190,9 +358,13 @@ class RoomManager {
 
   action(user, payload) {
     const room = this.requireRoom(user);
-    if (room.status !== 'playing') throw new UserError('Oyun getmir');
+    const isNote = payload && payload.type === 'note';
+    const chatOnly = payload && (payload.type === 'chat' || isNote) && room.status === 'finished';
+    if (room.status !== 'playing' && !chatOnly) throw new UserError('Oyun getmir');
     const alerts = [];
     games.get(room.gameId).action(room.state, user.id, payload || {}, this.ctx(room, user.id, alerts));
+    // Qeyd yalnız yazanındır: hamıya yayımlamadan bazaya yazılır
+    if (isNote) { if (!room.test) db.saveRoom(room); return; }
     this.commit(room, alerts);
   }
 
@@ -203,7 +375,7 @@ class RoomManager {
       now: Date.now(),
       isHost: userId != null && userId === room.hostId,
       players: room.players,
-      assign: room.assign || {},
+      nameOf: (id) => (room.players.find((p) => p.id === id) || {}).nickname || 'Oyunçu',
       alert: (userIds, kind) => alerts.push({ userIds, kind }),
     };
   }
@@ -215,6 +387,12 @@ class RoomManager {
     if (room.status === 'playing' && room.state && room.state.finished) {
       room.status = 'finished';
       room.closesAt = Date.now() + FINISHED_ROOM_TTL;
+      if (!room.resultSaved && room.test) {
+        room.resultSaved = true;
+        const res = game.result ? game.result(room.state) : {};
+        room.winners = res.winners || [];
+        room.rewards = null;
+      }
       if (!room.resultSaved) {
         room.resultSaved = true;
         const res = game.result ? game.result(room.state) : {};
@@ -240,13 +418,45 @@ class RoomManager {
         });
       }
     }
+    this.updateAuto(room);
     db.saveRoom(room);
     this.schedule(room);
     this.scheduleClose(room);
+    this.scheduleAuto(room);
+    this.scheduleBots(room);
     this.broadcast(room);
     for (const { userIds, kind } of alerts) {
       for (const id of userIds) this.io.to(`user:${id}`).emit('alert', { kind });
     }
+  }
+
+  // Açıq otaq: minimum say yığılanda geri sayım başlayır, dolanda qısalır, say azalanda ləğv olunur
+  updateAuto(room) {
+    if (room.visibility !== 'public' || room.status !== 'lobby') { room.autoStartAt = null; return; }
+    const game = games.get(room.gameId);
+    const n = room.players.length;
+    if (n < game.minPlayers) { room.autoStartAt = null; return; }
+    const now = Date.now();
+    if (!room.autoStartAt) room.autoStartAt = now + AUTO_START_MS;
+    if (n >= game.maxPlayers) room.autoStartAt = Math.min(room.autoStartAt, now + AUTO_START_FULL_MS);
+  }
+
+  scheduleAuto(room) {
+    clearTimeout(this.autoTimers.get(room.code));
+    this.autoTimers.delete(room.code);
+    if (!room.autoStartAt) return;
+    const code = room.code;
+    const at = room.autoStartAt;
+    this.autoTimers.set(code, setTimeout(() => {
+      const r = this.rooms.get(code);
+      if (!r || r.status !== 'lobby' || r.autoStartAt !== at) return;
+      try {
+        this.start({ id: r.hostId });
+      } catch (err) {
+        r.autoStartAt = null;
+        this.commit(r);
+      }
+    }, Math.max(0, at - Date.now())));
   }
 
   schedule(room) {
@@ -286,9 +496,14 @@ class RoomManager {
       status: room.status,
       settings: room.settings,
       settingsSchema: game.settings || [],
-      lobbyTeams: !!game.lobbyTeams,
-      assign: room.assign || {},
-      players: room.players.map((p) => ({ ...p, online: this.isOnline(p.id), look: db.lookOf(p.id) })),
+      test: !!room.test,
+      testAuto: !!room.testAuto,
+      name: room.name || '',
+      locked: !!room.passHash,
+      visibility: room.visibility || 'private',
+      langs: room.langs || ROOM_LANGS,
+      autoStartAt: room.status === 'lobby' ? room.autoStartAt || null : null,
+      players: room.players.map((p) => ({ ...p, online: p.bot || this.isOnline(p.id), look: db.lookOf(p.id) })),
       game: room.state ? game.view(room.state, userId) : null,
       earned: room.status === 'finished' && room.rewards ? room.rewards[userId] ?? null : null,
       closesAt: room.closesAt || null,
@@ -349,6 +564,10 @@ class RoomManager {
     this.timers.delete(room.code);
     clearTimeout(this.closeTimers.get(room.code));
     this.closeTimers.delete(room.code);
+    clearTimeout(this.autoTimers.get(room.code));
+    this.autoTimers.delete(room.code);
+    clearInterval(this.botTimers.get(room.code));
+    this.botTimers.delete(room.code);
     this.rooms.delete(room.code);
     for (const p of room.players) {
       if (this.byUser.get(p.id) === room.code) this.byUser.delete(p.id);

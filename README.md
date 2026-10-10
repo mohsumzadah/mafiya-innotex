@@ -1,8 +1,8 @@
-# 🎲 Game Night / Oyun Gecəsi
+# 🎲 Mafiya Kəndi / Mafiya Kəndi
 
 Telefonda qrup oyunları platforması: bir masa ətrafında, hər kəs öz telefonundan oynayır. Yükləmə yoxdur, host otaq yaradır, digərləri kod və ya QR ilə qoşulur.
 
-**Canlı:** https://oyun.innotex.az
+**Canlı:** https://mafiya.innotex.az
 
 ## Oyunlar
 - **Mafia**: mafia, həkim, komissar, vətəndaş; gecə/gündüz, səsli aparıcı

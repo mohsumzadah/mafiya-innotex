@@ -4,6 +4,9 @@
 window.GameClients = {};
 
 const $ = (sel, el = document) => el.querySelector(sel);
+const ROOM_LANGS = ['az', 'ru', 'en'];
+const LANG_TAGS = { az: '🇦🇿 Azərbaycanca', ru: '🇷🇺 Русский', en: '🇬🇧 English' };
+const langTag = (l) => LANG_TAGS[l] || l;
 const esc = (s) =>
   String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 
@@ -40,8 +43,9 @@ const ICONS = {
   trophy: '<path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/>',
   bag: '<path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>',
   // inno sikkəsi: dairə içində "i" (məlumat ikonundan fərqli olsun deyə ayaqlı)
-  coin: '<circle cx="12" cy="12" r="9.5"/><path d="M10.2 10.5H12.3v6"/><path d="M10 16.5h4.6"/><path d="M12.1 7.2h.01" stroke-width="2.6"/>',
+  coin: '<circle cx="12" cy="12" r="10" fill="#f59e0b" stroke="#b45309" stroke-width="1.3"/><circle cx="12" cy="12" r="7.5" fill="#fcd34d" stroke="#d98a06" stroke-width="1"/><path d="M12 6.2 L16.4 12 L12 17.8 L7.6 12Z" fill="#fffbe6" stroke="#b45309" stroke-width="1" stroke-linejoin="round"/><path d="M7.6 12h8.8M12 6.2 L10.2 12 L12 17.8 L13.8 12" fill="none" stroke="#e8a317" stroke-width=".7" stroke-linejoin="round"/><path d="M5.6 9.4 A7 7 0 0 1 10 5.2" fill="none" stroke="#fff" stroke-width="1.3" opacity=".7"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
+  chat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
   charades: '<rect width="18" height="14" x="3" y="7" rx="2"/><path d="m3 7 3-4 4 4"/><path d="m10 7 3-4 4 4"/><path d="m10 11 5 3-5 3z"/>',
   imposter: '<path d="M9.88 9.88a3 3 0 1 0 4.24 4.24"/><path d="M10.73 5.08A10.4 10.4 0 0 1 12 5c7 0 10 7 10 7a13.2 13.2 0 0 1-1.67 2.68"/><path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 7 10 7a9.7 9.7 0 0 0 5.39-1.61"/><path d="m2 2 20 20"/>',
 };
@@ -51,7 +55,7 @@ const initial = (nick) => esc((String(nick || '?').trim()[0] || '?').toLocaleUpp
 const Look = {
   name(p, text = p && p.nickname) {
     const l = (p && p.look) || {};
-    return `<span class="nm${l.name ? ` nm-${esc(l.name)}` : ''}" data-nt>${esc(text)}</span>${l.badge ? ` <span class="nm-badge">${esc(l.badge)}</span>` : ''}`;
+    return `<span class="nm${l.name ? ` nm-${esc(l.name)}` : ''}" data-nt>${esc(text)}</span>${l.badge ? ` ${ItemArt.badge(l.badge)}` : ''}`;
   },
   // Avatar çərçivəsi (.fr-<id>)
   frame(p) {
@@ -96,10 +100,10 @@ const byLine = (nick) => {
 
 // Oyun qaydaları səhifələri (server/landing.js) — seçilmiş dildə
 const RULES_PAGES = {
-  mafia: { emoji: '🕵️', name: 'Mafia', slug: { az: 'mafia', ru: 'mafia', en: 'mafia' } },
-  imposter: { emoji: '🤫', name: 'İmposter', slug: { az: 'imposter', ru: 'imposter', en: 'imposter' } },
-  charades: { emoji: '🎬', name: 'Səssiz kino', slug: { az: 'sessiz-kino', ru: 'krokodil', en: 'charades' } },
+  village: { emoji: '🏘️', name: 'Mafiya oyunu', slug: { az: 'mafiya', ru: 'mafiya', en: 'mafia' } },
 };
+const DEFAULT_CHAR = { skin: 1, hair: 0, hairColor: 0, shirt: 6, eyes: 0, brows: 0, mouth: 0, outfit: 0, pants: 0, extra: 0 };
+const GAME_TYPES = new Set(['costume', 'hat', 'face', 'back', 'pet', 'house', 'death']);
 const rulesUrl = (id) => `${LANG === 'az' ? '' : `/${LANG}`}/${RULES_PAGES[id].slug[LANG] || RULES_PAGES[id].slug.az}`;
 
 const MONTHS = ['Yanvar', 'Fevral', 'Mart', 'Aprel', 'May', 'İyun', 'İyul', 'Avqust', 'Sentyabr', 'Oktyabr', 'Noyabr', 'Dekabr'];
@@ -223,51 +227,6 @@ const Sound = {
   },
 };
 
-// ---------- Aparıcı səsi (yalnız hostun telefonunda) ----------
-// Hazır səs faylları: public/audio/<səs>/<klip>.mp3 (Microsoft Azərbaycan neyron səsləri).
-// Telefonun öz sintezatoru Azərbaycan dilini bilmir, ona görə istifadə olunmur.
-
-const VOICE_SETS = {
-  az: [{ id: 'babek', name: 'Babək' }, { id: 'banu', name: 'Banu' }],
-  ru: [{ id: 'dmitry', name: 'Дмитрий' }, { id: 'svetlana', name: 'Светлана' }],
-  en: [{ id: 'ryan', name: 'Ryan' }, { id: 'sonia', name: 'Sonia' }],
-};
-const voices = () => VOICE_SETS[LANG] || VOICE_SETS.az;
-
-const Narrator = {
-  get enabled() { return store.get('pg_narrator') !== 'off'; },
-  set enabled(v) { store.set('pg_narrator', v ? 'on' : 'off'); },
-  // Hər dil üçün ayrıca seçim yadda qalır
-  get voice() { const v = store.get(`pg_voice_${LANG}`) || store.get('pg_voice'); return voices().some((x) => x.id === v) ? v : voices()[0].id; },
-  set voice(v) { store.set(`pg_voice_${LANG}`, v); },
-  el: null,
-  // iOS səsi yalnız toxunuşdan sonra oynatmağa icazə verir: bir dəfə səssiz oynadıb elementi "açırıq"
-  unlock() {
-    if (this.el) return;
-    this.el = new Audio();
-    this.el.preload = 'auto';
-    this.el.muted = true;
-    this.el.src = this.url('hello');
-    this.el.play().then(() => { this.el.pause(); this.el.muted = false; }).catch(() => { this.el.muted = false; });
-  },
-  // ?v=: səs faylları dəyişəndə artır (brauzer onları bir həftə yaddaşda saxlayır)
-  url(clip, voice = this.voice) { return `/audio/${voice}/${clip}.mp3?v=2`; },
-  play(clip, force = false) {
-    if (!clip || (!this.enabled && !force)) return;
-    if (!this.el) this.unlock();
-    this.el.muted = false;
-    this.el.src = this.url(clip);
-    this.el.play().catch(() => {});
-  },
-  // Oyun başlamamış klipləri brauzer yaddaşına yüklə ki, mərhələ dəyişəndə gecikmə olmasın
-  preloaded: null,
-  preload(clips) {
-    if (this.preloaded === this.voice) return;
-    this.preloaded = this.voice;
-    for (const c of clips) fetch(this.url(c)).catch(() => {});
-  },
-};
-
 // ---------- Ekran sönməsin ----------
 
 const WakeLock = {
@@ -320,8 +279,14 @@ const App = {
   authMode: 'quick', // quick | login | register
   screen: 'home', // otaqda olmayanda: home | ranks | shop
   board: { period: 'month', data: null },
-  shop: { tab: 'name', data: null, preview: null },
+  shop: { tab: 'char', data: null, preview: null },
   admin: { tab: 'overview', stats: null, users: null, ads: null, q: '', kind: 'all', feedback: null, fbFilter: 'new', reviews: null },
+  social: null, // dostlar, sorğular, oxunmamışlar
+  friendsTab: 'friends',
+  dmWith: null,
+  dmMsgs: [],
+  profile: null,
+  searchRes: [],
   reviews: null, // ictimai rəylər
   reviewDraft: { stars: 0, text: '' },
   fbDraft: { kind: 'idea', text: '' },
@@ -339,7 +304,7 @@ const App = {
     store.set('pg_lang', lang);
     setLang(lang);
     document.documentElement.lang = LANG;
-    document.title = t('Oyun Gecəsi');
+    document.title = t('Mafiya oyunu');
     $('#conn').textContent = t('Bağlantı bərpa olunur…');
     this.sheet = null;
     this.render();
@@ -347,6 +312,9 @@ const App = {
 
   async init() {
     Dialog.init();
+    // Dəvət linki: /?ref=KOD — qeydiyyat anında göndərilir
+    const urlRef = new URLSearchParams(location.search).get('ref');
+    if (urlRef && /^[0-9a-z]{1,8}$/i.test(urlRef)) store.set('pg_ref', urlRef);
     // Oyun səhifələrindən gələn link dili bildirir: /?lang=ru
     const urlLang = new URLSearchParams(location.search).get('lang');
     if (urlLang && LANGS.some((l) => l.id === urlLang)) {
@@ -355,17 +323,15 @@ const App = {
     }
     setLang(store.get('pg_lang') || 'az');
     document.documentElement.lang = LANG;
-    document.title = t('Oyun Gecəsi');
+    document.title = t('Mafiya oyunu');
     $('#conn').textContent = t('Bağlantı bərpa olunur…');
-    document.addEventListener('pointerdown', () => {
-      Sound.unlock();
-      if (this.room && this.room.isHost) Narrator.unlock();
-    });
+    document.addEventListener('pointerdown', () => Sound.unlock());
     document.addEventListener('click', (e) => this.onClick(e));
     document.addEventListener('change', (e) => this.onChange(e));
     document.addEventListener('submit', (e) => this.onSubmit(e));
     document.addEventListener('input', (e) => {
       if (e.target.dataset.nickcheck !== undefined) this.checkNick(e.target);
+      if (e.target.dataset.friendsearch !== undefined) this.searchFriends(e.target.value);
       if (e.target.dataset.elan) this.onAdInput(e.target);
       if (e.target.dataset.draft === 'review') this.reviewDraft.text = e.target.value;
       if (e.target.dataset.draft === 'feedback') this.fbDraft.text = e.target.value;
@@ -376,6 +342,7 @@ const App = {
       }
     });
     setInterval(() => this.rotateAds(), 6000);
+    setInterval(() => { if (this.user && !this.room && this.screen === 'home' && !document.hidden) this.loadOpenRooms(); }, 5000);
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState !== 'visible') return;
       if (this.room) WakeLock.request();
@@ -416,6 +383,8 @@ const App = {
     const s = io({ auth: { token: this.token } });
     s.on('connect', () => {
       this.showConn(false);
+      this.loadOpenRooms();
+      this.loadSocial();
       if (this.pendingCode) {
         const code = this.pendingCode;
         this.pendingCode = null;
@@ -432,10 +401,18 @@ const App = {
       else this.showConn(true);
     });
     s.on('room', (room) => this.onRoom(room));
+    s.on('social:update', (d) => {
+      this.loadSocial();
+      if (d.kind === 'request') toast('🤝 Yeni dostluq sorğusu');
+      if (d.kind === 'friend') toast('🎉 Dostluq qəbul olundu');
+    });
+    s.on('social:dm', (m) => this.onDm(m));
+    s.on('social:presence', (d) => this.onPresence(d));
     s.on('alert', ({ kind }) => this.onAlert(kind));
     s.on('kicked', () => toast('Host səni otaqdan çıxardı'));
     s.on('ads:changed', () => this.loadAds());
     s.on('me:changed', () => this.refreshMe());
+    s.on('inno:changed', (d) => { this.loadInno(); if (d && d.paid) toast('🎉 İnno hesabına əlavə olundu!', 4000); });
     s.on('session:ended', () => { this.logout(true); toast('Şifrən admin tərəfindən dəyişdirildi, yenidən daxil ol', 4000); });
     s.on('account:deleted', () => { this.logout(true); toast('Hesabın admin tərəfindən silindi', 4000); });
     s.on('closed', () => toast('Yeni oyun başlamadı, otaq bağlandı', 4000));
@@ -450,7 +427,7 @@ const App = {
       }
       this.socket.timeout(8000).emit(event, data, (err, res) => {
         if (err) { toast('Server cavab vermədi'); return resolve({ ok: false }); }
-        if (!res.ok) toast(res.error);
+        if (!res.ok && !res.needsPassword) toast(res.error);
         resolve(res);
       });
     });
@@ -466,6 +443,13 @@ const App = {
     if (render) this.render();
   },
 
+  async loadInno() {
+    const res = await this.get('/api/inno/orders');
+    if (!res) return;
+    this.inno = res;
+    if (this.sheet === 'buy') this.render();
+  },
+
   async refreshMe() {
     try {
       const r = await fetch('/api/me', { headers: { Authorization: `Bearer ${this.token}` } });
@@ -476,6 +460,15 @@ const App = {
   onRoom(room) {
     const prev = this.room;
     this.room = room;
+    // Yalnız çata yeni mesaj gəlibsə ekranı yenidən çəkmirik: kənd yanıb-sönməsin, yazı pozulmasın
+    const gcp = room && GameClients[room.gameId];
+    if (gcp && gcp.updateChat && prev && prev.code === room.code && prev.status === room.status && room.game && prev.game && room.status === 'playing') {
+      const cl = (r) => (r.game.chat || []).length;
+      if (cl(prev) !== cl(room) && JSON.stringify({ ...prev, serverNow: 0, game: { ...prev.game, chat: 0 } }) === JSON.stringify({ ...room, serverNow: 0, game: { ...room.game, chat: 0 } })) {
+        this.offset = room.serverNow - Date.now();
+        if (gcp.updateChat(room)) return;
+      }
+    }
     // Oyun indicə bitdi: qələbə effektləri
     if (room && room.status === 'finished' && prev && prev.code === room.code && prev.status === 'playing') this.celebrate(room);
     // Oyun bitdi: qazanılan xalları yenilə
@@ -485,15 +478,8 @@ const App = {
       WakeLock.request();
     } else {
       WakeLock.release();
-    }
-
-    // Host telefonu mərhələ dəyişəndə aparıcı kimi danışır
-    const gc = room && GameClients[room.gameId];
-    if (room && room.isHost && gc && gc.clips && Narrator.enabled) Narrator.preload(gc.clips);
-    if (room && room.isHost && room.game && gc && gc.narration) {
-      const now = gc.narration(room.game, room);
-      const before = prev && prev.game && prev.gameId === room.gameId ? gc.narration(prev.game, prev) : null;
-      if (now && (!before || now.key !== before.key)) Narrator.play(now.clip);
+      const pgc = prev && GameClients[prev.gameId];
+      if (pgc && pgc.leave) pgc.leave();
     }
     this.render();
   },
@@ -551,8 +537,32 @@ const App = {
     const arg = el.dataset.arg;
     if (a === 'create') {
       el.disabled = true;
-      await this.emit('room:create', { gameId: arg });
+      await this.emit('room:create', { gameId: arg || 'village', visibility: el.dataset.vis === 'public' ? 'public' : 'private' });
       el.disabled = false;
+    } else if (a === 'test-start') {
+      el.disabled = true;
+      const res = await this.emit('room:test', { role: arg });
+      if (res.ok) this.sheet = null;
+      else el.disabled = false;
+    } else if (a === 'testauto') {
+      this.emit('room:testauto');
+    } else if (a === 'quick') {
+      el.disabled = true;
+      await this.emit('room:quick', { gameId: 'village', lang: LANG });
+      el.disabled = false;
+    } else if (a === 'join-room') {
+      if (el.dataset.locked === '1') { this.pwCode = arg; this.sheet = 'joinpw'; return this.render(); }
+      el.disabled = true;
+      await this.emit('room:join', { code: arg });
+      el.disabled = false;
+    } else if (a === 'rooms-refresh') {
+      this.loadOpenRooms(true);
+    } else if (a === 'room-lang') {
+      const cur = (this.room.langs || []).slice();
+      const next = cur.includes(arg) ? cur.filter((l) => l !== arg) : [...cur, arg];
+      if (next.length) this.emit('room:langs', { langs: next });
+    } else if (a === 'visibility') {
+      this.emit('room:visibility', { visibility: arg });
     } else if (a === 'start') {
       el.disabled = true;
       await this.emit('room:start');
@@ -560,22 +570,12 @@ const App = {
     } else if (a === 'leave') {
       const msg = this.room && this.room.status === 'playing' ? 'Oyundan çıxsan, oyunda ölmüş sayılacaqsan. Çıxırsan?' : 'Otaqdan çıxırsan?';
       if (await ask(msg, { ok: 'Çıx', danger: this.room && this.room.status === 'playing' })) this.emit('room:leave');
-    } else if (a === 'assign') {
-      this.emit('room:assign', { userId: Number(arg) });
     } else if (a === 'kick') {
       if (await ask('Bu oyunçunu otaqdan çıxarırsan?', { ok: 'Çıxar', danger: true })) this.emit('room:kick', { userId: Number(arg) });
     } else if (a === 'lobby') {
       if (this.room.status !== 'playing' || await ask('Oyunu dayandırıb lobbiyə qayıdırsan?', { ok: 'Dayandır', danger: true })) this.emit('room:lobby');
     } else if (a === 'share') {
       this.share();
-    } else if (a === 'narrator') {
-      Narrator.enabled = !Narrator.enabled;
-      toast(Narrator.enabled ? 'Aparıcı səsi açıldı' : 'Aparıcı səsi söndürüldü');
-      this.render();
-    } else if (a === 'voice') {
-      Narrator.enabled = arg !== 'off';
-      if (arg !== 'off') { Narrator.voice = arg; Narrator.play('hello'); }
-      this.render();
     } else if (a === 'logout') {
       // Şifrəsiz hesab çıxanda silinir: əvvəlcə şifrə qoymağı təklif et
       if (!this.user.hasPassword) { this.sheet = 'logout'; return this.render(); }
@@ -588,6 +588,33 @@ const App = {
       this.board.data = null;
       this.loadBoard(arg);
       this.render();
+    } else if (a === 'profile') {
+      await this.openProfile(arg);
+    } else if (a === 'fr-request' || a === 'fr-accept' || a === 'fr-decline' || a === 'fr-remove') {
+      await this.socialAct(a.slice(3), arg, el);
+    } else if (a === 'dm-open') {
+      await this.openDm(arg);
+    } else if (a === 'friends-tab') {
+      this.friendsTab = arg;
+      this.render();
+    } else if (a === 'invisible') {
+      const on = !(this.social && this.social.invisible);
+      const res = await this.emit('social:invisible', { on });
+      if (res.ok) { if (this.social) this.social.invisible = on; toast(on ? '👻 Görünməz oldun' : 'Yenə görünürsən'); this.render(); }
+    } else if (a === 'char-acc') {
+      this.charShowAcc = !this.charShowAcc;
+      this.render();
+    } else if (a === 'char-tab') {
+      this.charTab = arg;
+      this.render();
+    } else if (a === 'char-random') {
+      await this.randomChar();
+    } else if (a === 'char-set') {
+      const [k, v] = arg.split(':');
+      await this.setChar(k, v);
+    } else if (a === 'death-preview') {
+      const host = document.getElementById('death-demo');
+      if (host) VillageArt.demoDeath(arg, host);
     } else if (a === 'shop-tab') {
       this.shop.tab = arg;
       this.shop.preview = null;
@@ -599,6 +626,15 @@ const App = {
       const mine = this.reviews && this.reviews.mine;
       this.reviewDraft = mine ? { stars: mine.stars, text: mine.text } : { stars: 0, text: '' };
       this.sheet = 'review';
+      this.render();
+    } else if (a === 'review-quick') {
+      this.reviewAsked = true;
+      if (!this.user.hasPassword) { this.sheet = 'register'; return this.render(); }
+      this.reviewDraft = { stars: Number(arg), text: '' };
+      this.sheet = 'review';
+      this.render();
+    } else if (a === 'review-dismiss') {
+      this.reviewAsked = true;
       this.render();
     } else if (a === 'review-star') {
       this.reviewDraft.stars = Number(arg);
@@ -646,10 +682,20 @@ const App = {
         setTimeout(() => { if (this.sheet === 'daily') { this.sheet = null; this.render(); } }, 1400);
         this.render();
       } else el.disabled = false;
+    } else if (a === 'copy-invite') {
+      const link = this.inviteLink();
+      try { await navigator.clipboard.writeText(link); toast('Link kopyalandı'); }
+      catch { window.prompt ? toast(link, 5000) : toast('Kopyalamaq alınmadı'); }
+    } else if (a === 'share-invite') {
+      try { await navigator.share({ title: 'Mafiya oyunu', text: this.inviteText(), url: this.inviteLink() }); } catch {}
     } else if (a === 'fx-preview') {
       Effects.play(arg);
     } else if (a === 'item-buy') {
       await this.buyItem(arg, el);
+    } else if (a === 'item-none') {
+      if (!this.equippedId(arg)) return;
+      const res = await this.post('/api/shop/equip', { type: arg, itemId: null });
+      if (res) { this.user = res.user; this.shop.preview = null; this.render(); }
     } else if (a === 'item-wear' || a === 'item-remove') {
       el.disabled = true;
       await this.equipItem(arg, a === 'item-wear');
@@ -673,14 +719,33 @@ const App = {
     } else if (a === 'sheet') {
       this.sheet = arg;
       this.render();
+      if (arg === 'buy') this.loadInno();
       const f = $('.sheet input[name=nickname]');
       if (f) f.focus();
+    } else if (a === 'inno-order') {
+      el.disabled = true;
+      const res = await this.post('/api/inno/order', { pack: arg });
+      el.disabled = false;
+      if (res) { this.inno = { ...(this.inno || {}), orders: res.orders }; toast('Sorğu göndərildi'); this.render(); }
+    } else if (a === 'inno-claim') {
+      el.disabled = true;
+      const res = await this.post(`/api/inno/order/${arg}/claim`, {});
+      el.disabled = false;
+      if (res) { this.inno = { ...(this.inno || {}), orders: res.orders }; this.render(); }
+    } else if (a === 'inno-cancel') {
+      if (!(await ask('Sifarişi ləğv edək?', { ok: 'Ləğv et', danger: true }))) return;
+      const res = await this.post(`/api/inno/order/${arg}/cancel`, {});
+      if (res) { this.inno = { ...(this.inno || {}), orders: res.orders }; this.render(); }
     } else if (a === 'sheet-close') {
       if (e.target !== el && !e.target.closest('.sheet-x')) return; // pəncərənin içinə toxunmaq bağlamasın
       if (this.sheet === 'item') this.shop.preview = null;
       this.sheet = null;
       this.pendingItem = null;
       this.render();
+    } else if (a === 'admin-prices-reset') {
+      if (!(await ask('Bütün qiymətlər ilkin dəyərlərə qayıtsın?', { ok: 'Qaytar', danger: true }))) return;
+      const res = await this.post('/api/admin/prices/reset', {});
+      if (res) { this.admin.prices = res.prices; this.loadShop(); toast('Qiymətlər sıfırlandı'); this.render(); }
     } else if (a === 'admin-tab') {
       this.admin.tab = arg;
       this.render();
@@ -716,6 +781,14 @@ const App = {
 
   onChange(e) {
     const el = e.target;
+    if (el.name === 'rlang') {
+      const form = el.closest('form');
+      if (!form.querySelector('input[name=rlang]:checked')) el.checked = true; // ən az bir dil
+      form.querySelectorAll('.lang-chip').forEach((l) => l.classList.toggle('on', l.querySelector('input').checked));
+    }
+    if (el.name === 'vis') {
+      el.closest('.tabs').querySelectorAll('.vis-opt').forEach((l) => l.classList.toggle('active', l.contains(el)));
+    }
     if (el.dataset.setting) {
       this.emit('room:settings', { settings: { [el.dataset.setting]: el.value } });
     }
@@ -732,18 +805,50 @@ const App = {
       if (form.id === 'upgrade') await this.upgrade(form);
       if (form.id === 'admin-user') await this.adminSave(form);
       if (form.id === 'admin-rewards') await this.adminSaveRewards(form);
+      if (form.id === 'admin-prices') await this.adminSavePrices(form);
       if (form.id === 'admin-prizes') {
         const res = await this.post('/api/admin/prizes', { prizes: [0, 1, 2].map((i) => Number(form[`p${i}`].value)) });
         if (res) { this.admin.prizes = res.prizes; toast('Mükafatlar yadda saxlandı'); this.render(); }
       }
+      if (form.id === 'dm') await this.sendDm(form);
+      if (form.id === 'chat') {
+        const input = form.elements.text;
+        const text = input.value.trim();
+        if (text) {
+          input.value = '';
+          const res = await this.emit('game:action', { type: 'chat', text });
+          if (!res.ok) input.value = text;
+        }
+        input.focus();
+      }
       if (form.id === 'join') {
         const code = form.code.value.replace(/\D/g, '');
         if (code.length !== 4) toast('Kod 4 rəqəmli olmalıdır');
-        else await this.emit('room:join', { code });
+        else {
+          const res = await this.emit('room:join', { code });
+          if (!res.ok && res.needsPassword) { this.pwCode = code; this.sheet = 'joinpw'; this.render(); }
+        }
+      }
+      if (form.id === 'createroom') {
+        const res = await this.emit('room:create', {
+          gameId: 'village', visibility: form.vis.value === 'public' ? 'public' : 'private',
+          name: form.roomname.value.trim(), password: form.roompw.value,
+          langs: [...form.querySelectorAll('input[name=rlang]:checked')].map((i) => i.value), lang: LANG,
+        });
+        if (res.ok) this.sheet = null;
+      }
+      if (form.id === 'joinpw') {
+        const res = await this.emit('room:join', { code: this.pwCode, password: form.roompw.value });
+        if (res.ok) this.sheet = null;
+        else if (res.needsPassword) toast(res.error);
       }
     } finally {
       if (btn) btn.disabled = false;
     }
+  },
+
+  authHeaders() {
+    return { Authorization: `Bearer ${this.token}` };
   },
 
   async get(url) {
@@ -758,6 +863,205 @@ const App = {
     }
   },
 
+  // ---------- Dostlar və şəxsi mesajlar ----------
+
+  async loadSocial() {
+    const res = await new Promise((r) => (this.socket && this.socket.connected ? this.socket.timeout(6000).emit('social:list', {}, (e, x) => r(e ? null : x)) : r(null)));
+    if (!res || !res.ok) return;
+    this.social = res.social;
+    if (!this.room && ['home', 'friends'].includes(this.screen)) this.render();
+  },
+
+  onPresence({ id, online }) {
+    if (!this.social) return;
+    const f = this.social.friends.find((x) => x.id === id);
+    if (!f || f.online === online) return;
+    f.online = online;
+    if (!this.room && ['friends', 'dm'].includes(this.screen)) this.render();
+  },
+
+  onDm(m) {
+    if (this.screen === 'dm' && this.dmWith && this.dmWith.id === m.from && !this.room) {
+      this.dmMsgs.push(m);
+      this.socket.emit('social:history', { id: m.from }, () => {});
+      this.patchDm();
+      return;
+    }
+    if (this.social) {
+      this.social.unread += 1;
+      const f = this.social.friends.find((x) => x.id === m.from);
+      if (f) { f.unread += 1; f.last = { text: m.text, from_id: m.from, created_at: m.at }; }
+    }
+    vibrate(40);
+    Sound.play('ding');
+    toast(`💬 ${m.nickname}: ${m.text.length > 40 ? `${m.text.slice(0, 40)}…` : m.text}`, 3200);
+    if (!this.room && ['home', 'friends'].includes(this.screen)) this.render();
+  },
+
+  async openProfile(id) {
+    const res = await this.emit('social:profile', { id: Number(id) });
+    if (!res.ok) return;
+    this.profile = res.profile;
+    this.sheet = 'profile';
+    this.render();
+  },
+
+  async socialAct(kind, id, el) {
+    if (el) el.disabled = true;
+    const ev = { request: 'social:request', accept: 'social:respond', decline: 'social:respond', remove: 'social:remove' }[kind];
+    const res = await this.emit(ev, { id: Number(id), accept: kind === 'accept' });
+    if (el) el.disabled = false;
+    if (!res.ok) { if (res.needsAccount) { this.sheet = 'register'; this.render(); } return; }
+    if (this.profile && this.profile.id === Number(id)) this.profile.status = res.status;
+    this.searchRes.forEach((u) => { if (u.id === Number(id)) u.status = res.status; });
+    toast({ sent: 'Dostluq sorğusu göndərildi 🤝', friends: 'Artıq dostsunuz 🎉', none: 'Edildi' }[res.status] || 'Edildi');
+    await this.loadSocial();
+    this.render();
+  },
+
+  async openDm(id) {
+    const f = this.social && this.social.friends.find((x) => x.id === Number(id));
+    if (!f) return;
+    const res = await this.emit('social:history', { id: f.id });
+    if (!res.ok) return;
+    this.dmWith = f;
+    this.dmMsgs = res.messages;
+    this.sheet = null;
+    this.screen = 'dm';
+    if (f.unread && this.social) { this.social.unread = Math.max(0, this.social.unread - f.unread); f.unread = 0; }
+    this.render();
+  },
+
+  async sendDm(form) {
+    const input = form.elements.text;
+    const text = input.value.trim();
+    if (!text || !this.dmWith) return;
+    input.value = '';
+    const res = await this.emit('social:send', { id: this.dmWith.id, text });
+    if (!res.ok) { input.value = text; return; }
+    this.dmMsgs.push({ id: res.message.id, from: this.user.id, text: res.message.text, at: res.message.at });
+    this.patchDm();
+    input.focus();
+  },
+
+  dmBubbles() {
+    return this.dmMsgs.map((m) => `<div class="dm-msg${m.from === this.user.id ? ' mine' : ''}"><span data-nt>${esc(m.text)}</span><i>${new Date(m.at).toLocaleTimeString(LANG === 'en' ? 'en-GB' : LANG, { hour: '2-digit', minute: '2-digit' })}</i></div>`).join('');
+  },
+
+  patchDm() {
+    const log = document.getElementById('dm-log');
+    if (!log) return this.render();
+    log.innerHTML = this.dmBubbles();
+    log.scrollTop = log.scrollHeight;
+  },
+
+  async searchFriends(q) {
+    clearTimeout(this.searchTimer);
+    this.searchTimer = setTimeout(async () => {
+      if (q.trim().length < 2) { this.searchRes = []; return this.patchSearch(); }
+      const res = await new Promise((r) => this.socket.timeout(6000).emit('social:search', { q }, (e, x) => r(e ? null : x)));
+      if (res && res.ok) { this.searchRes = res.users; this.patchSearch(); }
+    }, 300);
+  },
+
+  patchSearch() {
+    const box = document.getElementById('friend-results');
+    if (!box) return;
+    box.innerHTML = this.searchRows();
+    translateDom(box);
+  },
+
+  userRow(u, right = '') {
+    return `<div class="player fr-row">
+      <button class="fr-main" data-app="profile" data-arg="${u.id}"><span class="initial sm${Look.frame(u)}">${initial(u.nickname)}</span><span class="name">${Look.name(u)}</span></button>${right}</div>`;
+  },
+
+  searchRows() {
+    if (!this.searchRes.length) return '<p class="hint">Nickname-in başlanğıcını yaz (ən azı 2 hərf)</p>';
+    const label = { none: 'Profil', sent: 'Göndərilib', received: 'Sorğu var', friends: 'Dostdur' };
+    return this.searchRes.map((u) => this.userRow(u, `<span class="tag">${label[u.status] || ''}</span>`)).join('');
+  },
+
+  viewFriends() {
+    const S = this.social || { friends: [], incoming: [], outgoing: [], unread: 0, invisible: false };
+    const tab = this.friendsTab;
+    const t = (id, label, badge) => `<button type="button" class="tab ${tab === id ? 'active' : ''}" data-app="friends-tab" data-arg="${id}">${label}${badge ? ` <span class="count-badge">${badge}</span>` : ''}</button>`;
+    let body = '';
+    if (tab === 'friends') {
+      body = S.friends.length ? S.friends.map((f) => `
+        <button class="player fr-row fr-chat" data-app="dm-open" data-arg="${f.id}">
+          <span class="avatar-wrap"><span class="initial sm${Look.frame(f)}">${initial(f.nickname)}</span><span class="dot ${f.online ? '' : 'off'}"></span></span>
+          <span class="fr-text"><span class="name">${Look.name(f)}</span><span class="muted small fr-last">${f.last ? `${f.last.from_id === this.user.id ? 'Sən: ' : ''}<span data-nt>${esc(f.last.text)}</span>` : f.online ? 'Onlayn' : 'Oflayn'}</span></span>
+          ${f.unread ? `<span class="count-badge">${f.unread}</span>` : ''}
+        </button>`).join('') : '<p class="hint">Hələ dostun yoxdur. «Axtar» bölməsindən və ya oyunda nickə toxunaraq dostluq göndər.</p>';
+    } else if (tab === 'requests') {
+      body = (S.incoming.length ? `<span class="eyebrow">Gələn sorğular</span>` + S.incoming.map((u) => this.userRow(u, `<span class="fr-acts"><button class="btn small primary" data-app="fr-accept" data-arg="${u.id}">Qəbul</button><button class="btn small outline" data-app="fr-decline" data-arg="${u.id}">${icon('x', 'sm')}</button></span>`)).join('') : '')
+        + (S.outgoing.length ? `<span class="eyebrow">Göndərilənlər</span>` + S.outgoing.map((u) => this.userRow(u, '<span class="tag">Gözləyir…</span>')).join('') : '')
+        || '<p class="hint">Sorğu yoxdur</p>';
+    } else {
+      body = `<input class="friend-search" data-friendsearch placeholder="Nickname axtar…" autocomplete="off" maxlength="20" aria-label="Axtar"><div id="friend-results" class="stack" style="gap:8px">${this.searchRows()}</div>`;
+    }
+    return `${this.subHeader('Dostlar')}
+      <div class="card invis-card"><span class="grow"><b>👻 Görünməz rejim</b><br><span class="muted small">Açıq olsa, dostların səni oflayn görür</span></span>
+        <button type="button" class="switch${S.invisible ? ' on' : ''}" data-app="invisible" role="switch" aria-checked="${S.invisible}" aria-label="Görünməz"><i></i></button></div>
+      <div class="tabs">${t('friends', 'Dostlar', S.unread)}${t('requests', 'Sorğular', S.incoming.length)}${t('search', 'Axtar')}</div>
+      <div class="stack" style="gap:8px">${body}</div>`;
+  },
+
+  viewDm() {
+    const f = this.dmWith;
+    if (!f) return this.viewFriends();
+    const live = this.social && this.social.friends.find((x) => x.id === f.id);
+    const online = live ? live.online : false;
+    return `
+      <div class="topbar">
+        <button class="btn ghost small icon-only" data-app="screen" data-arg="friends" aria-label="Geri">${icon('back')}</button>
+        <button class="title dm-title" data-app="profile" data-arg="${f.id}"><span class="avatar-wrap"><span class="initial sm${Look.frame(f)}">${initial(f.nickname)}</span><span class="dot ${online ? '' : 'off'}"></span></span> ${Look.name(f)}<span class="muted small">${online ? 'onlayn' : 'oflayn'}</span></button>
+        <span style="width:40px"></span>
+      </div>
+      <div class="dm-wrap card">
+        <div id="dm-log" class="dm-log">${this.dmBubbles() || '<p class="hint">Mesajlaşmağa başla 👋</p>'}</div>
+        <form id="dm" class="dm-form" autocomplete="off">
+          <input id="dm-input" name="text" maxlength="300" placeholder="Mesaj yaz…" enterkeyhint="send" aria-label="Mesaj">
+          <button class="btn primary small icon-only" type="submit" aria-label="Göndər">➤</button>
+        </form>
+      </div>`;
+  },
+
+  viewProfileSheet() {
+    const p = this.profile;
+    const status = {
+      none: `<button class="btn primary" data-app="fr-request" data-arg="${p.id}">🤝 Dostluq göndər</button>`,
+      sent: '<button class="btn outline" disabled>⏳ Sorğu göndərilib</button>',
+      received: `<div class="row" style="gap:8px"><button class="btn primary" data-app="fr-accept" data-arg="${p.id}">Qəbul et</button><button class="btn outline" data-app="fr-decline" data-arg="${p.id}">Rədd et</button></div>`,
+      friends: `<button class="btn primary" data-app="dm-open" data-arg="${p.id}">💬 Mesaj yaz</button><button class="btn ghost danger" data-app="fr-remove" data-arg="${p.id}">Dostluqdan çıxar</button>`,
+      self: '<p class="hint">Bu sənin profilindir</p>',
+    }[p.status] || '';
+    return `
+      <div class="sheet-backdrop" data-app="sheet-close">
+        <div class="sheet card stack" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+          <div class="row">
+            <div class="grow"><h2 id="sheet-title">${Look.name(p)}</h2>${p.status === 'friends' ? `<span class="small ${p.online ? 'on-txt' : 'muted'}">${p.online ? '● Onlayn' : '○ Oflayn'}</span>` : ''}</div>
+            <button type="button" class="btn ghost small icon-only sheet-x" data-app="sheet-close" aria-label="Bağla">${icon('x')}</button>
+          </div>
+          ${VillageArt.avatar(p.look)}
+          <div class="stat-grid"><div class="stat"><b>${p.points}</b><span class="muted small">xal</span></div><div class="stat"><b>${p.games}</b><span class="muted small">oyun</span></div><div class="stat"><b>${p.wins}</b><span class="muted small">qələbə</span></div></div>
+          ${p.registered ? status : '<p class="hint">Qonaq oyunçudur, dostluq göndərmək olmur</p>'}
+        </div>
+      </div>`;
+  },
+
+  // Açıq otaqlar siyahısı: ana ekranda hər 5 saniyədən bir yenilənir
+  async loadOpenRooms(manual = false) {
+    if (!this.socket || !this.socket.connected) return;
+    this.socket.timeout(5000).emit('room:list', {}, (err, res) => {
+      if (err || !res || !res.ok) return;
+      this.openRooms = res.rooms;
+      if (!this.room && this.screen === 'home' && !this.sheet && !(document.activeElement && document.activeElement.tagName === 'INPUT')) this.render();
+      if (manual) toast('Yeniləndi');
+    });
+  },
+
   async openScreen(name) {
     this.screen = name;
     window.scrollTo(0, 0);
@@ -766,6 +1070,7 @@ const App = {
     if (name === 'shop') this.loadShop();
     if (name === 'admin') this.loadAdmin(this.admin.tab);
     if (name === 'reviews') this.loadReviews();
+    if (name === 'friends') { this.friendsTab = this.friendsTab || 'friends'; this.loadSocial(); }
   },
 
   // ---------- Admin ----------
@@ -777,6 +1082,7 @@ const App = {
     if (tab === 'ads') { const d = await this.get('/api/admin/elan'); if (d) a.ads = d.ads; }
     if (tab === 'feedback') { const d = await this.get(`/api/admin/feedback?status=${a.fbFilter}`); if (d) a.feedback = d.feedback; }
     if (tab === 'reviews') { const d = await this.get('/api/admin/reviews'); if (d) a.reviews = d.reviews; }
+    if (tab === 'prices') { const d = await this.get('/api/admin/prices'); if (d) a.prices = d.prices; }
     if (this.screen !== 'admin' || this.room) return;
     // Axtarış sahəsində yazarkən fokus itməsin
     const focused = document.activeElement && document.activeElement.dataset.adminSearch !== undefined;
@@ -905,12 +1211,15 @@ const App = {
     if (form.password) body.password = form.password.value;
     if (this.authMode === 'register' && form.password2.value !== form.password.value) return toast('Şifrələr eyni deyil');
     const url = { quick: '/api/quick', login: '/api/login', register: '/api/register' }[this.authMode];
+    if (this.authMode !== 'login') { const ref = store.get('pg_ref'); if (ref) body.ref = ref; }
     const data = await this.post(url, body);
     if (!data) return;
+    if (this.authMode !== 'login') store.del('pg_ref');
     this.token = data.token;
     this.user = data.user;
     store.set('pg_token', data.token);
     this.connect();
+    this.loadReviews();
     this.render();
   },
 
@@ -968,6 +1277,21 @@ const App = {
 
   stars(n, cls = '') {
     return `<span class="stars ${cls}" aria-label="${n}/5">${[1, 2, 3, 4, 5].map((i) => `<i class="${i <= Math.round(n) ? 'on' : ''}">★</i>`).join('')}</span>`;
+  },
+
+  // Giriş ekranında real rəylər: yalnız ən azı 3 rəy olanda (boş görünməsin)
+  viewAuthReviews() {
+    const R = this.reviews;
+    if (!R || R.count < 3) return '';
+    const pick = [...R.list].sort((a, b) => (b.text ? 1 : 0) - (a.text ? 1 : 0)).slice(0, 3);
+    return `
+      <div class="auth-reviews">
+        <div class="row" style="justify-content:center;gap:8px">${this.stars(R.avg)}<b>${R.avg.toFixed(1)}</b><span class="muted small">${R.count} rəy</span></div>
+        ${pick.map((r) => `<div class="auth-review">
+          <div class="row"><b class="grow">${Look.name(r)}</b>${this.stars(r.stars)}</div>
+          ${r.text ? `<p data-nt>${esc(r.text)}</p>` : ''}
+        </div>`).join('')}
+      </div>`;
   },
 
   viewReviews() {
@@ -1222,6 +1546,14 @@ const App = {
 
   render() {
     const root = $('#app');
+    // Çat yazılarkən yenilənmə yazını, fokusu və sürüşdürməni pozmasın
+    const ci = document.getElementById('chat-input');
+    const keep = ci ? { value: ci.value, focus: document.activeElement === ci, start: ci.selectionStart, end: ci.selectionEnd } : null;
+    const di = document.getElementById('dm-input');
+    const dmKeep = di ? { value: di.value, focus: document.activeElement === di } : null;
+    const cl = document.getElementById('chat-log');
+    const stick = !cl || cl.scrollHeight - cl.scrollTop - cl.clientHeight < 40;
+    const prevScroll = cl ? cl.scrollTop : 0;
     let night = false;
     if (!store.get('pg_lang')) root.innerHTML = this.viewLangPick(true); // ilk giriş: əvvəlcə dil
     else if (!this.user) root.innerHTML = this.viewAuth();
@@ -1229,6 +1561,8 @@ const App = {
     else if (!this.room && this.screen === 'shop') root.innerHTML = this.viewShop();
     else if (!this.room && this.screen === 'admin' && this.user.isAdmin) root.innerHTML = this.viewAdmin();
     else if (!this.room && this.screen === 'reviews') root.innerHTML = this.viewReviews();
+    else if (!this.room && this.screen === 'friends') root.innerHTML = this.viewFriends();
+    else if (!this.room && this.screen === 'dm') root.innerHTML = this.viewDm();
     else if (!this.room) {
       root.innerHTML = this.viewHome();
       // Gündəlik bonus hazırdırsa pəncərəni bir dəfə özümüz aç
@@ -1240,18 +1574,44 @@ const App = {
       const out = gc ? gc.render(this.room) : { html: '<p>Bu oyun hələ dəstəklənmir</p>' };
       root.innerHTML = this.viewGameChrome(out.html);
       night = !!out.night;
+      if (gc && gc.afterRender) gc.afterRender(this.room);
+    }
+    if (this.user && !this.room && ['home', 'ranks', 'shop', 'reviews', 'admin', 'friends', 'dm'].includes(this.screen) && store.get('pg_lang')) {
+      root.innerHTML = `${this.viewNav()}<div class="page page-${this.screen}">${root.innerHTML}</div>`;
     }
     if (this.sheet === 'lang') root.insertAdjacentHTML('beforeend', this.viewLangSheet());
     else if (this.user && this.sheet === 'register' && !this.user.hasPassword) root.insertAdjacentHTML('beforeend', this.viewRegisterSheet());
+    else if (this.user && this.sheet === 'profile' && this.profile) root.insertAdjacentHTML('beforeend', this.viewProfileSheet());
+    else if (this.user && this.user.isAdmin && this.sheet === 'test') root.insertAdjacentHTML('beforeend', this.viewTestSheet());
+    else if (this.user && this.sheet === 'create') root.insertAdjacentHTML('beforeend', this.viewCreateSheet());
+    else if (this.user && this.sheet === 'joinpw') root.insertAdjacentHTML('beforeend', this.viewJoinPwSheet());
     else if (this.user && this.sheet === 'logout' && !this.user.hasPassword) root.insertAdjacentHTML('beforeend', this.viewLogoutSheet());
     else if (this.user && this.sheet === 'item' && this.shop.data && this.shop.preview) root.insertAdjacentHTML('beforeend', this.viewItemSheet());
     else if (this.user && this.sheet === 'review') root.insertAdjacentHTML('beforeend', this.viewReviewSheet());
     else if (this.user && this.sheet === 'feedback') root.insertAdjacentHTML('beforeend', this.viewFeedbackSheet());
     else if (this.user && this.sheet === 'daily' && this.user.daily) root.insertAdjacentHTML('beforeend', this.viewDailySheet());
+    else if (this.user && this.sheet === 'invite' && this.user.ref) root.insertAdjacentHTML('beforeend', this.viewInviteSheet());
     else if (this.user && this.sheet === 'buy' && this.shop.data) root.insertAdjacentHTML('beforeend', this.viewBuySheet());
     else if (this.user && this.user.isAdmin && this.sheet === 'admin-user') root.insertAdjacentHTML('beforeend', this.viewAdminUserSheet());
     else this.sheet = null;
+    // Açıq pəncərə eyni qalıb sadəcə məlumat yenilənibsə, açılış animasiyası təkrarlanmasın (ikiqat açılma görünüşü)
+    const bd = root.querySelector('.sheet-backdrop');
+    if (bd && this.sheet && this.sheet === this._shownSheet) bd.classList.add('noanim');
+    this._shownSheet = bd ? this.sheet : null;
     translateDom(root);
+    const ci2 = document.getElementById('chat-input');
+    if (ci2 && keep) {
+      if (!ci2.disabled) {
+        ci2.value = keep.value;
+        if (keep.focus) { ci2.focus({ preventScroll: true }); try { ci2.setSelectionRange(keep.start, keep.end); } catch {} }
+      }
+    }
+    const di2 = document.getElementById('dm-input');
+    if (di2 && dmKeep) { di2.value = dmKeep.value; if (dmKeep.focus) di2.focus({ preventScroll: true }); }
+    const dl = document.getElementById('dm-log');
+    if (dl) dl.scrollTop = dl.scrollHeight;
+    const cl2 = document.getElementById('chat-log');
+    if (cl2) cl2.scrollTop = stick ? cl2.scrollHeight : prevScroll;
     document.body.classList.toggle('night', night);
     const meta = document.querySelector('meta[name=theme-color]');
     if (meta) meta.content = night ? '#0b1020' : '#f4f5f8';
@@ -1318,14 +1678,22 @@ const App = {
     }[m];
     return `
       <div class="auth">
+        <div class="auth-art">
+          <div class="auth-art-brand"><span class="logo">${icon('logo')}</span><b>Mafiya oyunu</b></div>
+          <h2>Gecə mafia ov edir.<br>Gündüz kənd mafianı tapır.</h2>
+          <p>Online Mafia: çatda müzakirə et, səs ver, kəndi xilas et.</p>
+          <div class="auth-art-scene">${this.heroScene()}</div>
+          <ul class="auth-art-list"><li>${icon('users', 'sm')} 4–15 oyunçu</li><li>💬 Çat və səsvermə</li><li>🏆 Xal, reytinq və mükafatlar</li></ul>
+        </div>
+        <div class="auth-panel">
         <div class="auth-lang">${this.flagButton()}</div>
         <div class="auth-head">
           <div class="logo lg">${icon('logo')}</div>
           <div class="stack" style="gap:6px">
-            <h1>Oyun Gecəsi</h1>
+            <h1>Mafiya oyunu</h1>
             <p class="muted">
               <span class="rotator" aria-hidden="true"><span id="rotator-word">${ROTATOR_WORDS[Rotator.i]}</span></span>
-              bir masa ətrafında, hər kəs öz telefonundan oynayır.
+              online Mafia oyna: çatla, səs ver, mafianı tap.
             </p>
           </div>
         </div>
@@ -1337,33 +1705,53 @@ const App = {
           <span class="dot"></span> ${this.stats.online} nəfər onlayn · bu gün ${this.stats.gamesToday} oyun</p>` : ''}
         <div class="auth-foot">
           <span>${icon('phone', 'sm')} Yükləmə yoxdur</span>
-          <span>${icon('users', 'sm')} 3–20 nəfər</span>
+          <span>${icon('users', 'sm')} 4–15 nəfər</span>
           <span>${icon('clock', 'sm')} 1 dəqiqəyə başla</span>
         </div>
+        ${this.viewAuthReviews()}
         <div class="auth-games">
           <span class="eyebrow">Oyunlar və qaydalar</span>
           <div class="auth-games-row">${Object.keys(RULES_PAGES).map((id) => `
             <a class="auth-game" href="${rulesUrl(id)}"><span class="auth-game-emoji">${RULES_PAGES[id].emoji}</span><b>${esc(RULES_PAGES[id].name)}</b></a>`).join('')}
           </div>
         </div>
+        </div>
       </div>`;
+  },
+
+  // Ana ekranın kəndi: statik mini səhnə (oyunun görünüşü)
+  heroScene() {
+    return window.VillageArt ? VillageArt.hero() : '';
+  },
+
+  // Kompüter üçün yuxarı naviqasiya (mobildə gizlidir)
+  viewNav() {
+    const u = this.user;
+    const link = (screen, label, ic) => `<button class="nav-link${this.screen === screen ? ' active' : ''}" data-app="screen" data-arg="${screen}" title="${label.replace(/<[^>]*>/g, '')}">${icon(ic, 'sm')}<span class="nl">${label}</span></button>`;
+    return `<header class="site-nav">
+      <button class="nav-brand" data-app="screen" data-arg="home"><span class="logo">${icon('logo')}</span><b>Mafiya oyunu</b></button>
+      <nav class="nav-links">
+        ${link('home', 'Oyna', 'play')}${link('ranks', 'Reytinq', 'trophy')}${link('shop', 'Mağaza', 'bag')}${link('friends', `Dostlar${this.social && this.social.unread ? ` <span class="count-badge">${this.social.unread}</span>` : ''}`, 'users')}${link('reviews', 'Rəylər', 'star')}${u.isAdmin ? link('admin', 'Admin', 'shield') : ''}
+      </nav>
+      <div class="nav-right">
+        <span class="nav-chip pts">${icon('trophy', 'sm')} ${u.points} xal</span>
+        <span class="nav-chip coin">${icon('coin', 'sm')} ${u.coins} inno</span>
+        <span class="nav-user"><span class="initial sm${Look.frame(u)}">${initial(u.nickname)}</span><span class="nav-name">${Look.name(u)}</span></span>
+        ${this.flagButton()}
+        <button class="btn ghost small icon-only" data-app="logout" aria-label="Çıxış" title="Çıxış">${icon('logout')}</button>
+      </div>
+    </header>`;
   },
 
   viewHome() {
     const u = this.user;
-    const games = this.games
-      .map((g) => g.comingSoon
-        ? `<div class="card game-row soon">
-             <div class="icon alt">${gameIcon(g)}</div>
-             <div class="grow"><b>${esc(g.name)}</b><span class="muted small">${esc(g.description)}</span></div>
-             <span class="badge">Tezliklə</span>
-           </div>`
-        : `<div class="card game-row">
-             <div class="icon">${gameIcon(g)}</div>
-             <div class="grow"><b>${esc(g.name)}</b><span class="muted small">${icon('users', 'sm')} ${g.minPlayers}–${g.maxPlayers} nəfər</span></div>
-             <button class="btn primary small" data-app="create" data-arg="${esc(g.id)}">${icon('plus', 'sm')} Otaq yarat</button>
-           </div>`)
-      .join('');
+    const fits = (r) => (r.langs || []).includes(LANG);
+    const openRooms = (this.openRooms || []).slice().sort((a, b) => Number(fits(b)) - Number(fits(a))).map((r) => `
+      <button class="card game-row open-room" data-app="join-room" data-arg="${esc(r.code)}" data-locked="${r.locked ? 1 : 0}" ${r.full ? 'disabled' : ''}>
+        <div class="icon">${icon('mafia')}</div>
+        <div class="grow"><b data-nt>${r.locked ? '🔒 ' : ''}${esc(r.name || r.host)}</b><span class="muted small">${icon('users', 'sm')} ${r.count}/${r.max}${r.name ? ` · <span data-nt>${esc(r.host)}</span>` : ''} · ${(r.langs || []).map(langTag).join(' ')}${r.autoStartAt ? ' · tezliklə başlayır' : r.count < r.min ? ` · ${r.min - r.count} nəfər çatmır` : ''}</span></div>
+        <span class="badge">${r.full ? 'Dolu' : 'Qoşul'}</span>
+      </button>`).join('');
     // Xal və inno ayrıca blok deyil: Reytinq/Mağaza düymələrinin içində
     // Naviqasiya düymələri: başlıq + dəyər + ox (basıla bildiyi aydın olsun)
     const quick = (screen, ic, cls, label, value) => `
@@ -1382,35 +1770,67 @@ const App = {
       <div class="quick-row${u.isAdmin ? ' three' : ''}">
         ${quick('ranks', 'trophy', 'gold', 'Reytinq', `${u.points} xal`)}
         ${quick('shop', 'bag', 'coin', 'Mağaza', `${u.coins} inno`)}
+        ${quick('friends', 'users', 'dark', 'Dostlar', this.social ? (this.social.unread ? `${this.social.unread} yeni mesaj` : `${this.social.friends.filter((f) => f.online).length} onlayn`) : '')}
         ${u.isAdmin ? quick('admin', 'shield', 'dark', 'Admin', '') : ''}
       </div>
-      ${u.daily && u.daily.available ? `
-      <button class="daily-bar" data-app="sheet" data-arg="daily">
-        <span class="daily-gift">🎁</span><span class="grow"><b>Gündəlik bonus hazırdır</b><span class="small">Gün ${u.daily.day}/7 · +${u.daily.rewards[u.daily.day - 1]} inno</span></span>${icon('chev', 'sm')}
-      </button>` : ''}
-      ${u.hasPassword ? '' : `
-      <button class="guest-bar" data-app="sheet" data-arg="register">
-        ${icon('lock', 'sm')}<span class="grow">Şifrə qoy, hesabın itməsin</span>${icon('chev', 'sm')}
-      </button>`}
-      ${this.viewAds({ empty: true })}
-      <form id="join" class="card join-card">
-        <div class="join-label"><b>Otağa qoşul</b><span class="muted small">Hostun ekranındakı 4 rəqəmli kod</span></div>
-        <div class="join">
-          <input class="code-input" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="0000" autocomplete="off" aria-label="Otaq kodu">
-          <button class="btn primary" type="submit" aria-label="Qoşul">${icon('arrow')}</button>
+      <div class="home-grid">
+        <div class="home-main">
+          <section class="hero card">
+            <div class="hero-text">
+              <span class="eyebrow">Online Mafia</span>
+              <h1>Mafiya oyunu</h1>
+              <p class="muted">Gecə mafia ov edir, gündüz hamı çatda müzakirə edib səs verir. Mafianı tap!</p>
+              <button class="btn primary lg quick-play" data-app="quick">${icon('play')} Sürətli oyna</button>
+              <div class="hero-chips"><span class="pill">${icon('users', 'sm')} 4–15 oyunçu</span><span class="pill">${icon('chat', 'sm')} Çat</span><span class="pill">${icon('mafia', 'sm')} 4 rol</span></div>
+            </div>
+            <div class="hero-art">${this.heroScene()}</div>
+          </section>
+          <section class="card rooms-card">
+            <div class="section-title"><h3>Açıq otaqlar</h3><button class="btn ghost small" data-app="rooms-refresh">Yenilə</button></div>
+            <div class="open-rooms">${openRooms || '<p class="hint">Hazırda açıq otaq yoxdur. «Sürətli oyna» bas, otaq sən açarsan.</p>'}</div>
+          </section>
+          <div class="join-grid">
+            <button class="card create-card" data-app="sheet" data-arg="create">
+              <span class="stat-ic coin">${icon('plus', 'sm')}</span>
+              <span class="grow"><b>Otaq yarat</b><span class="muted small">İstəsən ad və şifrə qoy</span></span>
+            </button>
+            <form id="join" class="card join-card">
+              <div class="join-label"><b>Otağa qoşul</b><span class="muted small">4 rəqəmli kod</span></div>
+              <div class="join">
+                <input class="code-input" name="code" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="0000" autocomplete="off" aria-label="Otaq kodu">
+                <button class="btn primary" type="submit" aria-label="Qoşul">${icon('arrow')}</button>
+              </div>
+            </form>
+          </div>
         </div>
-      </form>
-      <div class="games">${games}</div>
-      <div class="home-links">
-        <button class="quick" data-app="screen" data-arg="reviews">
-          <span class="stat-ic gold">⭐</span>
-          <span class="quick-text"><b>Rəylər</b><span class="muted small">${this.reviews && this.reviews.count ? `${this.reviews.avg} · ${this.reviews.count} rəy` : 'Fikrini bildir'}</span></span>
-          ${icon('chev', 'sm quick-chev')}
-        </button>
-        <button class="quick" data-app="sheet" data-arg="feedback">
-          <span class="stat-ic coin">💬</span>
-          <span class="quick-text"><b>Təklif / şikayət</b><span class="muted small">Yalnız admin görür</span></span>
-        </button>
+        <aside class="home-side">
+          ${u.daily && u.daily.available ? `
+          <button class="daily-bar" data-app="sheet" data-arg="daily">
+            <span class="daily-gift">🎁</span><span class="grow"><b>Gündəlik bonus hazırdır</b><span class="small">Gün ${u.daily.day}/7 · +${u.daily.rewards[u.daily.day - 1]} inno</span></span>${icon('chev', 'sm')}
+          </button>` : ''}
+          <button class="daily-bar invite-bar" data-app="sheet" data-arg="invite">
+            <span class="daily-gift">🤝</span><span class="grow"><b>Dostunu dəvət et</b><span class="small">Hər dost üçün +${u.ref ? u.ref.inviter : 15} inno</span></span>${icon('chev', 'sm')}
+          </button>
+          ${u.hasPassword ? '' : `
+          <button class="guest-bar" data-app="sheet" data-arg="register">
+            ${icon('lock', 'sm')}<span class="grow">Şifrə qoy, hesabın itməsin</span>${icon('chev', 'sm')}
+          </button>`}
+          ${u.isAdmin ? `<button class="daily-bar test-bar" data-app="sheet" data-arg="test">
+            <span class="daily-gift">🧪</span><span class="grow"><b>Test rejimi</b><span class="small">Botlarla oyun, avtomatik gedir</span></span>${icon('chev', 'sm')}
+          </button>` : ''}
+          ${this.viewAds({ empty: true })}
+          <div class="home-links">
+            <button class="quick" data-app="screen" data-arg="reviews">
+              <span class="stat-ic gold">⭐</span>
+              <span class="quick-text"><b>Rəylər</b><span class="muted small">${this.reviews && this.reviews.count ? `${this.reviews.avg} · ${this.reviews.count} rəy` : 'Fikrini bildir'}</span></span>
+              ${icon('chev', 'sm quick-chev')}
+            </button>
+            <button class="quick" data-app="sheet" data-arg="feedback">
+              <span class="stat-ic coin">💬</span>
+              <span class="quick-text"><b>Təklif / şikayət</b><span class="muted small">Yalnız admin görür</span></span>
+            </button>
+          </div>
+        </aside>
       </div>`;
   },
 
@@ -1519,6 +1939,7 @@ const App = {
         </div>
         <div class="stack" style="gap:8px">${rows}</div>`;
     }
+    if (A.tab === 'prices') body = !A.prices ? loading : this.viewPricesForm();
     if (A.tab === 'ads') {
       const label = { active: 'Aktiv', ended: 'Bitib', stopped: 'Dayandırılıb' };
       body = !A.ads ? loading : !A.ads.length ? '<p class="hint">Hələ elan yoxdur</p>' : A.ads.map((a) => `
@@ -1562,8 +1983,60 @@ const App = {
     }
     return `
       ${this.subHeader('Admin paneli')}
-      <div class="tabs scroll">${tab('overview', 'İcmal')}${tab('users', 'İstifadəçilər')}${tab('ads', 'Elanlar')}${tab('feedback', `Müraciətlər${A.stats && A.stats.newFeedback ? ` <span class="count-badge">${A.stats.newFeedback}</span>` : ''}`)}${tab('reviews', 'Rəylər')}</div>
+      <div class="tabs scroll">${tab('overview', 'İcmal')}${tab('users', 'İstifadəçilər')}${tab('ads', 'Elanlar')}${tab('feedback', `Müraciətlər${A.stats && A.stats.newFeedback ? ` <span class="count-badge">${A.stats.newFeedback}</span>` : ''}`)}${tab('reviews', 'Rəylər')}${tab('prices', 'Qiymətlər')}</div>
       ${body}`;
+  },
+
+  // Admin: bütün qiymətlər (inno paketləri AZN ilə, qalanı inno ilə)
+  viewPricesForm() {
+    const P = this.admin.prices;
+    const changed = (a, b) => (a !== b ? ' changed' : '');
+    const num = (name, v, def, step = 1, min = 1) => `<input name="${name}" type="number" inputmode="decimal" min="${min}" step="${step}" required value="${v}" class="price-in${changed(v, def)}" title="İlkin: ${def}">`;
+    const packs = P.packs.map((p, i) => `
+      <div class="price-row"><b>${i + 1}-ci paket</b>
+        <label class="small">İnno ${num(`pk${i}inno`, p.inno, p.defInno)}</label>
+        <label class="small">AZN ${num(`pk${i}price`, p.price, p.defPrice, 0.01, 0.01)}</label></div>`).join('');
+    const st = P.starter;
+    const ads = P.ads.map((a) => `<div class="price-row"><b>Reklam · ${a.days} gün</b><label class="small">İnno ${num(`ad_${a.id}`, a.price, a.def)}</label></div>`).join('');
+    const types = Object.fromEntries((P.types || []).map((t) => [t.id, t.label]));
+    const groups = [];
+    P.items.forEach((i) => {
+      let g = groups.find((x) => x.type === i.type);
+      if (!g) { g = { type: i.type, list: [] }; groups.push(g); }
+      g.list.push(i);
+    });
+    const items = groups.map((g) => `
+      <details class="card price-group">
+        <summary><b class="grow">${esc(types[g.type] || g.type)}</b><span class="muted small">${g.list.length}</span>${icon('chev', 'chev')}</summary>
+        <div class="price-list">${g.list.map((i) => `<label class="price-item"><span class="grow small">${esc(i.name)}</span>${num(`it_${i.id}`, i.price, i.def)}</label>`).join('')}</div>
+      </details>`).join('');
+    return `
+      <form id="admin-prices" class="stack">
+        <div class="card stack">
+          <div><h3>İnno paketləri</h3><p class="muted small">Oyunçunun real pulla aldığı paketlər. Nə qədər çox inno, 1 inno o qədər ucuz olmalıdır.</p></div>
+          ${packs}
+          <div class="price-row starter"><b>🔥 Başlanğıc paketi</b>
+            <label class="small">İnno ${num('st_inno', st.inno, st.defInno)}</label>
+            <label class="small">AZN ${num('st_price', st.price, st.defPrice, 0.01, 0.01)}</label></div>
+        </div>
+        <div class="card stack"><div><h3>Reklam</h3></div>${ads}</div>
+        <div class="stack" style="gap:8px"><div><h3>Mağaza əşyaları (inno)</h3><p class="muted small">Kateqoriyanı aç, qiyməti dəyiş. Dəyişmiş qiymətlər qırmızı çərçivədədir, ilkin qiymət üzərinə toxunanda görünür.</p></div>${items}</div>
+        <button class="btn primary" type="submit">${icon('check')} Hamısını yadda saxla</button>
+        <button class="btn ghost danger" type="button" data-app="admin-prices-reset">İlkin qiymətlərə qaytar</button>
+      </form>`;
+  },
+
+  async adminSavePrices(form) {
+    const n = (name) => Number(form.elements[name].value);
+    const body = { items: {}, packs: this.admin.prices.packs.map((_, i) => ({ inno: n(`pk${i}inno`), price: n(`pk${i}price`) })), starter: { inno: n('st_inno'), price: n('st_price') }, ads: {} };
+    this.admin.prices.items.forEach((i) => { body.items[i.id] = n(`it_${i.id}`); });
+    this.admin.prices.ads.forEach((a) => { body.ads[a.id] = n(`ad_${a.id}`); });
+    const res = await this.post('/api/admin/prices', body);
+    if (!res) return;
+    this.admin.prices = res.prices;
+    this.loadShop(); // mağaza qiymətləri yenilənsin
+    toast('Qiymətlər yadda saxlandı');
+    this.render();
   },
 
   viewRewardsForm() {
@@ -1635,6 +2108,7 @@ const App = {
     const on = this.equippedId(i.type) === i.id;
     const look = { ...(u.look || {}), [i.type]: i.type === 'badge' ? i.emoji : i.id };
     const me = { nickname: u.nickname, look };
+    const game = GAME_TYPES.has(i.type);
     let action;
     if (on) action = `<button class="btn outline" data-app="item-remove" data-arg="${i.id}">${icon('x')} Çıxart</button>`;
     else if (owned) action = `<button class="btn primary" data-app="item-wear" data-arg="${i.id}">${icon('check')} Tax</button>`;
@@ -1648,14 +2122,16 @@ const App = {
         <div class="sheet card stack" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
           <div class="row">
             <div class="grow"><span class="eyebrow">${esc(type ? type.label : '')}</span>
-              <h2 id="sheet-title">${i.emoji ? `${esc(i.emoji)} ` : ''}${esc(i.name)}</h2></div>
+              <h2 id="sheet-title">${esc(i.name)}</h2></div>
             <button type="button" class="btn ghost small icon-only sheet-x" data-app="sheet-close" aria-label="Bağla">${icon('x')}</button>
           </div>
-          <span class="eyebrow">Lobbidə belə görünəcəksən</span>
+          ${game ? `<span class="eyebrow">Oyunda belə görünəcəksən</span>${i.type === 'death' ? '<div id="death-demo" class="death-demo"></div>' : VillageArt.avatar(look)}
+            ${i.type === 'death' ? `<button class="btn outline" data-app="death-preview" data-arg="${i.id.replace('death_', '')}">▶ Effekti önizlə</button><p class="hint">Gecə öldürüləndə evinin qarşısında hamı görür</p>` : ''}`
+          : `<span class="eyebrow">Lobbidə belə görünəcəksən</span>
           <div class="player item-preview${Look.row(me)}">
             <span class="avatar-wrap"><span class="initial sm${Look.frame(me)}">${initial(u.nickname)}</span><span class="dot"></span></span>
             <span class="name">${Look.name(me)}</span>
-          </div>
+          </div>`}
           ${i.type === 'win' ? `<button class="btn outline" data-app="fx-preview" data-arg="${i.id}">▶ Effekti önizlə</button>
             <p class="hint">Oyunu udanda otaqdakı hər kəsin ekranında oynayır</p>` : ''}
           ${!owned && this.priceOf(i) !== i.price ? `<p class="deal-note">🔥 Həftənin təklifi: <s>${i.price}</s> → ${this.priceOf(i)} inno</p>` : ''}
@@ -1674,10 +2150,11 @@ const App = {
     const left = Math.max(0, deal.endsAt - this.now());
     const days = Math.floor(left / 86400e3);
     const hours = Math.floor((left % 86400e3) / 3600e3);
-    const sample = i.type === 'bg' ? `<span class="swatch bg-${i.id}"></span>`
+    const sample = GAME_TYPES.has(i.type) ? VillageArt.sample(i.type, i.id, this.user.look, i.emoji)
+      : i.type === 'bg' ? `<span class="swatch bg-${i.id}"></span>`
       : i.type === 'frame' ? `<span class="initial fr-${i.id}">${initial(this.user.nickname)}</span>`
       : i.type === 'name' ? `<span class="nm nm-${i.id} sample-name" style="font-size:26px">Aa</span>`
-      : `<span class="sample-badge" style="font-size:30px">${i.emoji}</span>`;
+      : (ItemArt.icon(i.type, i.type === 'badge' ? i.emoji : i.id) || `<span class="sample-badge" style="font-size:30px">${esc(i.emoji || '')}</span>`);
     return `
       <button class="card deal-card" data-app="shop-item" data-arg="${i.id}">
         <span class="deal-sample">${sample}</span>
@@ -1694,6 +2171,36 @@ const App = {
   priceOf(i) {
     const deal = this.shop.data && this.shop.data.deal;
     return deal && deal.itemId === i.id ? deal.price : i.price;
+  },
+
+  inviteLink() { return `${location.origin}/?ref=${this.user.ref.code}`; },
+  inviteText() { return 'Gəl bir masa ətrafında telefondan Mafia və İmposter oynayaq! Yükləmə yoxdur, linki aç, qoşul:'; },
+
+  viewInviteSheet() {
+    const r = this.user.ref;
+    const link = this.inviteLink();
+    const enc = encodeURIComponent;
+    const text = `${this.inviteText()} ${link}`;
+    return `
+      <div class="sheet-backdrop" data-app="sheet-close">
+        <div class="sheet card stack" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+          <div class="row">
+            <div class="grow"><h2 id="sheet-title">🤝 Dostunu dəvət et</h2></div>
+            <button type="button" class="btn ghost small icon-only sheet-x" data-app="sheet-close" aria-label="Bağla">${icon('x')}</button>
+          </div>
+          <p class="muted small">Dostun bu linklə qoşulub ilk oyununu bitirəndə sən <b>+${r.inviter} inno</b>, o isə <b>+${r.invitee} inno</b> qazanır. Oyun ən azı 3 nəfərlik olmalıdır.</p>
+          <input class="code-input" style="font-size:0.95rem;letter-spacing:0" readonly value="${esc(link)}" onfocus="this.select()" data-nt aria-label="Dəvət linki">
+          <div class="row" style="gap:8px;flex-wrap:wrap">
+            <a class="btn primary grow" target="_blank" rel="noopener" href="https://wa.me/?text=${enc(text)}">WhatsApp</a>
+            <a class="btn grow" target="_blank" rel="noopener" href="https://t.me/share/url?url=${enc(link)}&text=${enc(this.inviteText())}">Telegram</a>
+          </div>
+          <div class="row" style="gap:8px;flex-wrap:wrap">
+            <button class="btn grow" data-app="copy-invite">Linki kopyala</button>
+            ${navigator.share ? '<button class="btn grow" data-app="share-invite">Paylaş…</button>' : ''}
+          </div>
+          <p class="banner good center">Dəvət etdiyin: <b>${r.count}</b> / ${r.max} dost · qazandığın: <b>${r.count * r.inviter}</b> inno</p>
+        </div>
+      </div>`;
   },
 
   viewDailySheet() {
@@ -1721,22 +2228,50 @@ const App = {
       </div>`;
   },
 
-  // İnno paketləri: ödəniş WhatsApp-da razılaşdırılır, admin sonra paneldən innonu əlavə edir
+  // İnno paketləri: sifariş -> admin Telegramda ödəniş linki göndərir -> "Ödədim" -> admin təsdiqləyir -> inno avtomatik yazılır
   viewBuySheet() {
     const { packs, whatsapp, starter } = this.shop.data.buy;
     const u = this.user;
+    const inno = this.inno;
+    const active = inno && (inno.orders || []).find((o) => ['requested', 'link_sent', 'claimed'].includes(o.status));
     const base = packs[0].price / packs[0].inno; // ən kiçik paketin 1 inno qiyməti
-    const msg = (p) => `Salam! İnno almaq istəyirəm.\nHesab adı: ${u.nickname}\nİnno miqdarı: ${p.inno} inno\nMəbləğ: ${p.price} AZN`;
-    const items = packs.map((p) => {
+    const canBuy = u.hasPassword && inno && inno.enabled;
+    const items = packs.map((p, i) => {
       const off = Math.round((1 - p.price / (p.inno * base)) * 100);
       const inner = `
         <span class="pack-amount">${icon('coin')} ${p.inno} <small>inno</small></span>
         ${off > 0 ? `<span class="badge pack-off">-${off}%</span>` : ''}
         <span class="pack-price">${p.price} ₼</span>`;
       return u.hasPassword
-        ? `<a class="pack" href="https://wa.me/${esc(whatsapp)}?text=${encodeURIComponent(msg(p))}" target="_blank" rel="noopener">${inner}</a>`
+        ? `<button type="button" class="pack" data-app="inno-order" data-arg="${i}" ${canBuy ? '' : 'disabled'}>${inner}</button>`
         : `<button type="button" class="pack" data-app="sheet" data-arg="register">${inner}</button>`;
     }).join('');
+
+    const orderCard = (o) => {
+      const head = `<div class="row"><b>${icon('coin')} ${o.inno} inno</b><span class="grow"></span><b>${o.price} ₼</b></div>`;
+      if (o.status === 'requested') return `<div class="card stack order-card">${head}
+        <p class="muted small">⏳ Sorğun göndərildi. Admin ödəniş linkini hazırlayır, adətən bir neçə dəqiqə çəkir. Bu pəncərəni bağlaya bilərsən, link gələndə burada görünəcək.</p>
+        <button type="button" class="btn ghost small" data-app="inno-cancel" data-arg="${o.id}">Ləğv et</button></div>`;
+      if (o.status === 'link_sent') return `<div class="card stack order-card">${head}
+        <p class="muted small">💳 Ödəniş linki hazırdır. Linkdən ödə, sonra «Ödədim» bas.</p>
+        <a class="btn primary" href="${esc(o.payLink)}" target="_blank" rel="noopener">${icon('arrow')} Ödəniş et · ${o.price} ₼</a>
+        <button type="button" class="btn" data-app="inno-claim" data-arg="${o.id}">✅ Ödədim</button>
+        <button type="button" class="btn ghost small" data-app="inno-cancel" data-arg="${o.id}">Ləğv et</button></div>`;
+      return `<div class="card stack order-card">${head}
+        <p class="muted small">🔎 Ödəniş yoxlanılır. Admin təsdiqləyən kimi inno avtomatik hesabına əlavə olunacaq və bildiriş alacaqsan.</p></div>`;
+    };
+
+    const starterCard = (starter && !active && !(inno && (inno.orders || []).some((o) => o.starter && o.status !== 'cancelled'))) ? (() => {
+      const off = Math.round((1 - starter.price / (starter.inno * base)) * 100);
+      const inner = `<span class="starter-tag">🔥 Başlanğıc paketi · bir dəfəlik</span>
+        <span class="pack-amount">${icon('coin')} ${starter.inno} <small>inno</small></span>
+        <span class="badge pack-off">-${off}%</span>
+        <span class="pack-price">${starter.price} ₼</span>`;
+      return u.hasPassword
+        ? `<button type="button" class="pack starter" data-app="inno-order" data-arg="starter" ${canBuy ? '' : 'disabled'}>${inner}</button>`
+        : `<button type="button" class="pack starter" data-app="sheet" data-arg="register">${inner}</button>`;
+    })() : '';
+
     return `
       <div class="sheet-backdrop" data-app="sheet-close">
         <div class="sheet card stack" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
@@ -1745,22 +2280,69 @@ const App = {
             <button type="button" class="btn ghost small icon-only sheet-x" data-app="sheet-close" aria-label="Bağla">${icon('x')}</button>
           </div>
           ${u.hasPassword
-            ? '<p class="muted small">Paketi seç: WhatsApp hazır mesajla açılacaq. Ödənişdən sonra inno hesabına əlavə olunur.</p>'
+            ? (active ? '' : '<p class="muted small">Paketi seç: sorğu göndərilir, admin sənə ödəniş linki göndərir. Ödənişdən sonra inno hesabına avtomatik əlavə olunur.</p>')
             : '<div class="banner bad small">İnno almaq üçün əvvəlcə qeydiyyatdan keç, yoxsa alınan inno hesabınla birlikdə itə bilər.</div>'}
-          ${starter ? (() => {
-            const off = Math.round((1 - starter.price / (starter.inno * base)) * 100);
-            const smsg = `Salam! Başlanğıc paketini almaq istəyirəm.\nHesab adı: ${u.nickname}\nİnno miqdarı: ${starter.inno} inno\nMəbləğ: ${starter.price} AZN`;
-            const inner = `<span class="starter-tag">🔥 Başlanğıc paketi · bir dəfəlik</span>
-              <span class="pack-amount">${icon('coin')} ${starter.inno} <small>inno</small></span>
-              <span class="badge pack-off">-${off}%</span>
-              <span class="pack-price">${starter.price} ₼</span>`;
-            return u.hasPassword
-              ? `<a class="pack starter" href="https://wa.me/${esc(whatsapp)}?text=${encodeURIComponent(smsg)}" target="_blank" rel="noopener">${inner}</a>`
-              : `<button type="button" class="pack starter" data-app="sheet" data-arg="register">${inner}</button>`;
-          })() : ''}
-          <div class="packs">${items}</div>
-          ${u.hasPassword ? `<p class="hint">${icon('phone', 'sm')} Mesajda hesab adın (<b data-nt>${esc(u.nickname)}</b>) və paket avtomatik yazılır</p>` : ''}
+          ${u.hasPassword && inno && !inno.enabled ? '<div class="banner bad small">Sifariş sistemi hazırda işləmir. Zəhmət olmasa bir az sonra yoxla.</div>' : ''}
+          ${active ? orderCard(active) : `${starterCard}<div class="packs">${items}</div>`}
+          <p class="hint">${icon('phone', 'sm')} Sualın var? <a href="https://wa.me/${esc(whatsapp)}" target="_blank" rel="noopener">WhatsApp</a></p>
         </div>
+      </div>`;
+  },
+
+  viewTestSheet() {
+    const roles = [['', '🎲 Təsadüfi'], ['mafia', '🔪 Mafia'], ['doctor', '💉 Həkim'], ['detective', '🔍 Komissar'], ['citizen', '🙂 Vətəndaş']];
+    return `
+      <div class="sheet-backdrop" data-app="sheet-close">
+        <div class="sheet card stack" role="dialog" aria-modal="true" aria-labelledby="sheet-title">
+          <div class="row">
+            <div class="grow"><h2 id="sheet-title">🧪 Test rejimi</h2></div>
+            <button type="button" class="btn ghost small icon-only sheet-x" data-app="sheet-close" aria-label="Bağla">${icon('x')}</button>
+          </div>
+          <p class="muted small">Sənə 6 bot qoşulur və oyun dərhal başlayır. Botlar özləri seçir, yazır və səs verir. Bütün rollar görünür, xal və inno yazılmır.</p>
+          <span class="small"><b>Sənin rolun</b></span>
+          <div class="players">${roles.map(([id, label]) => `<button class="player" data-app="test-start" data-arg="${id}"><span class="name">${label}</span></button>`).join('')}</div>
+        </div>
+      </div>`;
+  },
+
+  viewCreateSheet() {
+    return `
+      <div class="sheet-backdrop" data-app="sheet-close">
+        <form id="createroom" class="sheet card stack" role="dialog" aria-modal="true" aria-labelledby="sheet-title" autocomplete="off">
+          <div class="row">
+            <div class="grow"><h2 id="sheet-title">Otaq yarat</h2></div>
+            <button type="button" class="btn ghost small icon-only sheet-x" data-app="sheet-close" aria-label="Bağla">${icon('x')}</button>
+          </div>
+          <label>Otaq adı <span class="muted small">(istəyə görə)</span>
+            <input name="roomname" maxlength="24" placeholder="Məsələn: Cümə axşamı oyunu"></label>
+          <label>Şifrə <span class="muted small">(istəyə görə)</span>
+            <input name="roompw" type="text" maxlength="30" placeholder="Boş qoysan, şifrəsiz olacaq" autocomplete="off"></label>
+          <div class="stack" style="gap:6px"><span class="small"><b>Otaqda danışılan dillər</b></span>
+            <div class="lang-chips">${ROOM_LANGS.map((l) => `<label class="lang-chip${l === LANG ? ' on' : ''}"><input type="checkbox" name="rlang" value="${l}" ${l === LANG ? 'checked' : ''} hidden> ${langTag(l)}</label>`).join('')}</div>
+            <span class="muted small">Oyunçular bu dillərdə yazışacaq. Siyahıda dilinə uyğun otaqlar yuxarıda görünür.</span>
+          </div>
+          <div class="stack" style="gap:6px"><span class="small"><b>Otaq növü</b></span>
+            <div class="tabs">
+              <label class="tab active vis-opt"><input type="radio" name="vis" value="public" checked hidden> 🌍 Açıq (siyahıda görünür)</label>
+              <label class="tab vis-opt"><input type="radio" name="vis" value="private" hidden> 🔒 Gizli (yalnız kodla)</label>
+            </div>
+          </div>
+          <button class="btn primary" type="submit">${icon('plus')} Otaq yarat</button>
+        </form>
+      </div>`;
+  },
+
+  viewJoinPwSheet() {
+    return `
+      <div class="sheet-backdrop" data-app="sheet-close">
+        <form id="joinpw" class="sheet card stack" role="dialog" aria-modal="true" aria-labelledby="sheet-title" autocomplete="off">
+          <div class="row">
+            <div class="grow"><h2 id="sheet-title">🔒 Otaq şifrəlidir</h2></div>
+            <button type="button" class="btn ghost small icon-only sheet-x" data-app="sheet-close" aria-label="Bağla">${icon('x')}</button>
+          </div>
+          <label>Şifrə <input name="roompw" type="text" required maxlength="30" autofocus autocomplete="off"></label>
+          <button class="btn primary" type="submit">Qoşul ${icon('arrow')}</button>
+        </form>
       </div>`;
   },
 
@@ -1821,7 +2403,7 @@ const App = {
     const d = this.shop.data;
     const u = this.user;
     if (!d) return `${this.subHeader('Mağaza')}<p class="hint">Yüklənir…</p>`;
-    const tabs = [...d.types, { id: 'ads', label: 'Reklam' }]
+    const tabs = [{ id: 'char', label: '🧑 Personaj' }, ...d.types, { id: 'ads', label: 'Reklam' }]
       .map((t) => `<button type="button" class="tab ${this.shop.tab === t.id ? 'active' : ''}" data-app="shop-tab" data-arg="${t.id}">${t.label}</button>`)
       .join('');
 
@@ -1831,18 +2413,28 @@ const App = {
     if (pv) look[pv.type] = pv.type === 'badge' ? pv.emoji : pv.id;
     const me = { nickname: u.nickname, look };
 
-    const items = d.items
+    // Hər kateqoriyanın birinci xanası: taxılanı bir toxunuşla çıxart
+    const noneOn = !this.equippedId(this.shop.tab);
+    const noneTile = `
+          <button class="shop-item none-item${noneOn ? ' on' : ''}" data-app="item-none" data-arg="${esc(this.shop.tab)}" ${noneOn ? 'aria-pressed="true"' : ''}>
+            <span class="sample"><span class="none-mark">${icon('x')}</span></span>
+            <b>Heç biri</b>
+            <span class="item-status${noneOn ? ' on' : ''}">${noneOn ? `${icon('check', 'sm')} Seçilib` : 'Çıxart'}</span>
+          </button>`;
+    const items = noneTile + d.items
       .filter((i) => i.type === this.shop.tab)
       .map((i) => {
         const owned = d.owned.includes(i.id);
         const on = this.equippedId(i.type) === i.id;
-        const sample = i.type === 'name'
+        const sample = GAME_TYPES.has(i.type)
+          ? VillageArt.sample(i.type, i.id, u.look, i.emoji)
+          : i.type === 'name'
           ? `<span class="nm nm-${i.id} sample-name">Aa</span>`
           : i.type === 'bg'
             ? `<span class="swatch bg-${i.id}"></span>`
             : i.type === 'frame'
               ? `<span class="initial fr-${i.id}">${initial(u.nickname)}</span>`
-              : `<span class="sample-badge">${i.emoji}</span>`;
+              : (ItemArt.icon(i.type, i.type === 'badge' ? i.emoji : i.id) || `<span class="sample-badge">${esc(i.emoji || '')}</span>`);
         const status = on
           ? `<span class="item-status on">${icon('check', 'sm')} Taxılıb</span>`
           : owned
@@ -1877,7 +2469,16 @@ const App = {
         <button class="btn small dark" data-app="sheet" data-arg="register">Qeydiyyat</button>
       </div>`}
       ${this.viewDeal()}
-      ${this.shop.tab === 'ads' ? `<div class="tabs">${tabs}</div>${this.viewAdShop()}` : `
+      ${this.shop.tab === 'ads' ? `<div class="tabs wrap">${tabs}</div>${this.viewAdShop()}`
+        : this.shop.tab === 'char' ? `<div class="tabs wrap">${tabs}</div>${this.viewCharEditor()}`
+        : GAME_TYPES.has(this.shop.tab) ? `
+      <div class="stack" style="gap:8px">
+        <span class="eyebrow">Oyunda belə görünəcəksən${pv ? ' (önizləmə)' : ''}</span>
+        ${VillageArt.avatar(look)}
+      </div>
+      <div class="tabs wrap">${tabs}</div>
+      <div class="shop-grid">${items}</div>
+      <p class="hint">Əşyaya toxun: önizlə, al və ya tax</p>` : `
       <div class="stack" style="gap:8px">
         <span class="eyebrow">Lobbidə belə görünəcəksən${pv ? ' (önizləmə)' : ''}</span>
         <div class="player${Look.row(me)}">
@@ -1885,10 +2486,58 @@ const App = {
           <span class="name">${Look.name(me)}</span>
         </div>
       </div>
-      <div class="tabs">${tabs}</div>
+      <div class="tabs wrap">${tabs}</div>
       <div class="shop-grid">${items}</div>
       <p class="hint">Əşyaya toxun: önizlə, al və ya tax</p>`}`;
   },
+
+  // Pulsuz personaj redaktoru: dəri, saç, üz, geyim
+  viewCharEditor() {
+    const u = this.user;
+    const C = VillageArt.CHAR;
+    const cur = { ...DEFAULT_CHAR, ...((u.look && u.look.char) || {}) };
+    const tab = this.charTab || 'skin';
+    const sw = (key, list, val) => list.map((c, i) => `<button type="button" class="swatch-btn${val === i ? ' on' : ''}" style="background:${c}" data-app="char-set" data-arg="${key}:${i}" aria-label="${i + 1}"></button>`).join('');
+    const th = (key, n, val) => Array.from({ length: n }, (_, i) => `<button type="button" class="thumb-btn${val === i ? ' on' : ''}" data-app="char-set" data-arg="${key}:${i}" aria-label="${i + 1}">${VillageArt.thumb(key, i, cur)}</button>`).join('');
+    const row = (label, html) => `<div class="stack" style="gap:6px"><span class="eyebrow">${label}</span>${html}</div>`;
+    const panes = {
+      skin: row('Dəri tonu', `<div class="swatch-row">${sw('skin', C.SKIN, cur.skin)}</div>`),
+      hair: row('Saç forması', `<div class="thumb-row">${th('hair', C.N.hair, cur.hair)}</div>`) + row('Saç rəngi', `<div class="swatch-row">${sw('hairColor', C.HAIR, cur.hairColor)}</div>`),
+      face: row('Gözlər', `<div class="thumb-row">${th('eyes', C.N.eyes, cur.eyes)}</div>`) + row('Qaşlar', `<div class="thumb-row">${th('brows', C.N.brows, cur.brows)}</div>`)
+        + row('Ağız', `<div class="thumb-row">${th('mouth', C.N.mouth, cur.mouth)}</div>`) + row('Üz detalı (çil, saqqal…)', `<div class="thumb-row">${th('extra', C.N.extra, cur.extra)}</div>`),
+      outfit: row('Geyim', `<div class="thumb-row">${th('outfit', C.N.outfit, cur.outfit)}</div>`) + row('Geyim rəngi', `<div class="swatch-row">${sw('shirt', C.SHIRTS, cur.shirt)}</div>`) + row('Şalvar / kombinezon rəngi', `<div class="swatch-row">${sw('pants', C.PANTS, cur.pants)}</div>`),
+    };
+    const tabs = [['skin', 'Dəri'], ['hair', 'Saç'], ['face', 'Üz'], ['outfit', 'Geyim']];
+    return `
+      <div class="card char-editor stack">
+        <div class="char-preview">${VillageArt.avatar(this.charShowAcc ? { ...(u.look || {}), char: cur } : { ...(u.look || {}), costume: undefined, hat: undefined, face: undefined, back: undefined, char: cur })}</div>
+        ${u.look && (u.look.costume || u.look.hat || u.look.face || u.look.back) ? `<button type="button" class="btn small outline" data-app="char-acc">${this.charShowAcc ? '👒 Aksesuarları gizlət' : '👒 Aksesuarlarla göstər'}</button>
+          <p class="hint">${this.charShowAcc ? 'Hazır tip, papaq, eynək və ya maska saçı, gözü və ağızı dəyişə və ya örtə bilər.' : 'Önizləmədə aksesuarlar gizlədilib ki, bütün seçimlər aydın görünsün.'}</p>` : ''}
+        <div class="row" style="gap:8px">
+          <div class="tabs grow">${tabs.map(([id, l]) => `<button type="button" class="tab ${tab === id ? 'active' : ''}" data-app="char-tab" data-arg="${id}">${l}</button>`).join('')}</div>
+          <button type="button" class="btn small outline" data-app="char-random" title="Təsadüfi">🎲</button>
+        </div>
+        ${panes[tab]}
+        <p class="hint">Bu hissə pulsuzdur. Papaq, eynək, plaş, heyvan, ev və ölüm effektləri üçün yuxarıdakı bölmələrə bax.</p>
+      </div>`;
+  },
+
+  async setChar(key, val) {
+    const u = this.user;
+    const cur = { ...DEFAULT_CHAR, ...((u.look && u.look.char) || {}) };
+    cur[key] = Number(val);
+    const res = await this.post('/api/shop/char', cur);
+    if (res) { this.user = res.user; this.render(); }
+  },
+
+  async randomChar() {
+    const C = VillageArt.CHAR;
+    const r = (n) => Math.floor(Math.random() * n);
+    const cur = { skin: r(C.SKIN.length), hair: r(C.N.hair), hairColor: r(C.HAIR.length), shirt: r(C.SHIRTS.length), eyes: r(C.N.eyes), brows: r(C.N.brows), mouth: r(C.N.mouth), outfit: r(C.N.outfit), pants: r(C.PANTS.length), extra: Math.random() < 0.6 ? 0 : r(C.N.extra) };
+    const res = await this.post('/api/shop/char', cur);
+    if (res) { this.user = res.user; this.render(); }
+  },
+
 
   viewLobby() {
     const r = this.room;
@@ -1896,7 +2545,7 @@ const App = {
       .map((p) => `
         <div class="player${Look.row(p)}">
           <span class="avatar-wrap"><span class="initial sm${Look.frame(p)}">${initial(p.nickname)}</span><span class="dot ${p.online ? '' : 'off'}"></span></span>
-          <span class="name">${Look.name(p)}${p.id === r.me ? ' <span class="tag">(sən)</span>' : ''}</span>
+          <button class="name nick-link" data-app="profile" data-arg="${p.id}">${Look.name(p)}${p.id === r.me ? ' <span class="tag">(sən)</span>' : ''}</button>
           ${p.id === r.hostId ? `<span class="crown" title="Host">${icon('crown', 'sm')}</span>` : ''}
           ${r.isHost && p.id !== r.me ? `<button class="btn ghost small icon-only" data-app="kick" data-arg="${p.id}" aria-label="Çıxar">${icon('x', 'sm')}</button>` : ''}
         </div>`)
@@ -1915,41 +2564,41 @@ const App = {
     return `
       <div class="topbar">
         <button class="btn ghost small icon-only" data-app="leave" aria-label="Otaqdan çıx">${icon('back')}</button>
-        <div class="title">${esc(r.gameName)}</div>
+        <div class="title">${r.locked ? '🔒 ' : ''}<span data-nt>${esc(r.name || r.gameName)}</span></div>
         <span style="width:40px"></span>
       </div>
+      <div class="lobby-grid">
+      <div class="lobby-left">
       <div class="room-hero">
         <span class="eyebrow">Otaq kodu</span>
         <div class="room-code">${esc(r.code)}</div>
-        ${this.qrSvg(r.code)}
-        <span class="qr-hint">Kameranı QR koda tut, dərhal qoşul</span>
+        <span class="qr-hint">${r.visibility === 'public' ? '🌍 Açıq otaq: hər kəs qoşula bilər' : '🔒 Xüsusi otaq: yalnız kodu bilənlər'}</span>
         <button class="btn small" data-app="share">${icon('share', 'sm')} Dəvət et</button>
       </div>
+      <div class="room-langs"><span class="muted small">Otaqda danışılan dillər:</span> ${(r.langs || []).map(langTag).join(' ')}</div>
       ${RULES_PAGES[r.gameId] ? `<a class="rules-link" href="${rulesUrl(r.gameId)}" target="_blank" rel="noopener">📖 ${esc(r.gameName)}: qaydalar</a>` : ''}
       <div class="section-title"><h3>Oyunçular</h3><span class="pill">${icon('users', 'sm')} ${r.players.length}/${r.maxPlayers}</span></div>
       <div class="players">${players}</div>
+      </div>
+      <div class="lobby-right">
       ${GameClients[r.gameId] && GameClients[r.gameId].lobby ? GameClients[r.gameId].lobby(r) : ''}
       ${this.viewAds()}
       ${settings ? `<details class="card"><summary><span class="notice-icon" style="background:var(--soft);color:var(--primary)">${icon('sliders')}</span><b class="grow">Ayarlar</b>${icon('chev', 'chev')}</summary><div class="settings" style="margin-top:16px">${settings}</div></details>` : ''}
-      ${r.isHost ? this.viewVoicePicker() : ''}
+      ${r.isHost ? `<div class="card stack"><div class="row"><span class="grow"><b>Otaqda danışılan dillər</b><br><span class="muted small">Bir neçə dil seçə bilərsən</span></span></div>
+        <div class="lang-chips">${ROOM_LANGS.map((l) => `<button type="button" class="lang-chip${(r.langs || []).includes(l) ? ' on' : ''}" data-app="room-lang" data-arg="${l}">${langTag(l)}</button>`).join('')}</div></div>
+      <div class="card stack"><div class="row"><span class="grow"><b>Otaq növü</b><br><span class="muted small">Açıq otaq siyahıda görünür və yetərli oyunçu yığılanda avtomatik başlayır</span></span></div>
+        <div class="tabs">
+          <button type="button" class="tab ${r.visibility === 'private' ? 'active' : ''}" data-app="visibility" data-arg="private">🔒 Xüsusi</button>
+          <button type="button" class="tab ${r.visibility === 'public' ? 'active' : ''}" data-app="visibility" data-arg="public">🌍 Açıq</button>
+        </div></div>` : ''}
+      ${r.autoStartAt ? `<p class="hint">${icon('clock', 'sm')} Oyun <b data-deadline="${r.autoStartAt}"></b> san. sonra avtomatik başlayır</p>` : ''}
       <div class="spacer"></div>
       ${r.isHost
         ? `<button class="btn primary" data-app="start" ${need > 0 ? 'disabled' : ''}>${icon('play')} Oyunu başlat</button>
            ${need > 0 ? `<p class="hint">Başlamaq üçün daha ${need} nəfər lazımdır</p>` : ''}`
         : '<p class="hint">Host oyunu başladana qədər gözlə…</p>'}
-      ${this.closeNote(r)}`;
-  },
-
-  // Otağa qoşulma linki üçün QR (telefonun kamerası ilə oxunur)
-  qrSvg(code) {
-    try {
-      const q = qrcode(0, 'M');
-      q.addData(`${location.origin}/?room=${code}`);
-      q.make();
-      return `<div class="qr" aria-label="QR">${q.createSvgTag({ cellSize: 4, margin: 2, scalable: true })}</div>`;
-    } catch {
-      return '';
-    }
+      ${this.closeNote(r)}
+      </div></div>`;
   },
 
   // Oyun bitəndə: qaliblərin alınmış qələbə effekti otaqdakı hər kəsə; effekti olmayan qalib öz ekranında sadə konfeti görür
@@ -1972,36 +2621,28 @@ const App = {
     return `<p class="hint">${icon('clock', 'sm')} Yeni oyun başlamasa, otaq <b data-deadline="${r.closesAt}"></b> sonra bağlanacaq</p>`;
   },
 
-  viewVoicePicker() {
-    const cur = Narrator.enabled ? Narrator.voice : 'off';
-    const tab = (id, label) =>
-      `<button type="button" class="tab ${cur === id ? 'active' : ''}" data-app="voice" data-arg="${id}">${label}</button>`;
-    return `
-      <div class="card stack voice-card">
-        <div class="row">
-          <span class="notice-icon" style="background:var(--soft);color:var(--primary)">${icon('sound')}</span>
-          <span class="grow"><b>Aparıcı səsi</b><br><span class="muted small">Sənin telefonundan oxunur. Toxun, dinlə</span></span>
-        </div>
-        <div class="tabs">${voices().map((v) => tab(v.id, `<span data-nt>${v.name}</span>`)).join('')}${tab('off', 'Səssiz')}</div>
-      </div>`;
-  },
-
   viewGameChrome(inner) {
     const r = this.room;
-    const hostTools = r.isHost
-      ? `<button class="btn ghost small icon-only" data-app="narrator" title="Aparıcı səsi" aria-label="Aparıcı səsi">${icon(Narrator.enabled ? 'sound' : 'mute')}</button>`
-      : '<span style="width:40px"></span>';
+    const hostTools = '<span style="width:40px"></span>';
     return `
       <div class="topbar">
         <button class="btn ghost small icon-only" data-app="leave" aria-label="Oyundan çıx">${icon('back')}</button>
         <div class="title">${esc(r.gameName)} <span class="muted small">#${esc(r.code)}</span></div>
         ${hostTools}
       </div>
+      ${r.test ? `<div class="test-strip"><span>🧪 Test rejimi · rollar görünür</span>
+        <button class="btn small ${r.testAuto ? 'primary' : 'outline'}" data-app="testauto">${r.testAuto ? '⏸ Avto-oyun: açıq' : '▶ Avto-oyun'}</button></div>` : ''}
       ${inner}
       ${r.earned ? `<div class="card earned">
           <span>${icon('star')} +${r.earned.points} xal</span>
           ${r.earned.coins ? `<span>${icon('coin')} +${r.earned.coins} inno</span>` : ''}
         </div>` : ''}
+      ${r.status === 'finished' && !this.reviewAsked && this.reviews && !this.reviews.mine ? `
+      <div class="card rate-prompt">
+        <button class="btn ghost small icon-only sheet-x" data-app="review-dismiss" aria-label="Bağla">${icon('x', 'sm')}</button>
+        <b>Oyun necə idi?</b>
+        <div class="star-pick">${[1, 2, 3, 4, 5].map((i) => `<button type="button" data-app="review-quick" data-arg="${i}" aria-label="${i}">★</button>`).join('')}</div>
+      </div>` : ''}
       ${r.isHost && r.status === 'finished' ? `<button class="btn primary" data-app="lobby">${icon('replay')} Yenidən oyna</button>` : ''}
       ${this.closeNote(r)}
       ${r.isHost && r.status === 'playing' ? '<button class="btn ghost" data-app="lobby">Oyunu dayandır</button>' : ''}`;

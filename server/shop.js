@@ -9,6 +9,14 @@ const DEFAULT_REWARDS = { win: { points: 15, coins: 10 }, lose: { points: 5, coi
 const DEFAULT_PRIZES = [200, 100, 50];
 
 const TYPES = [
+  // Oyun içi personaj və kənd (public/js/games/village.js)
+  { id: 'costume', label: 'Hazır tip' },
+  { id: 'hat', label: 'Papaq' },
+  { id: 'face', label: 'Üz' },
+  { id: 'back', label: 'Arxa' },
+  { id: 'pet', label: 'Heyvan' },
+  { id: 'house', label: 'Ev' },
+  { id: 'death', label: 'Ölüm effekti' },
   { id: 'name', label: 'Ad rəngi' },
   { id: 'bg', label: 'Arxa fon' },
   { id: 'badge', label: 'Nişan' },
@@ -17,6 +25,75 @@ const TYPES = [
 ];
 
 const ITEMS = [
+  // Hazır tiplər: tam geyim, aksesuar və rənglərlə hazır personaj (aşağıdakı papaq, üz və arxa aksesuarları üstünə taxmaq olar)
+  { id: 'costume_villager', type: 'costume', name: 'Kəndli', price: 350 },
+  { id: 'costume_mafia', type: 'costume', name: 'Mafiya', price: 650 },
+  { id: 'costume_commissar', type: 'costume', name: 'Komissar', price: 650 },
+  { id: 'costume_zombie', type: 'costume', name: 'Zombi', price: 450 },
+  { id: 'costume_clown', type: 'costume', name: 'Təlxək', price: 450 },
+  { id: 'costume_ninja', type: 'costume', name: 'Ninja', price: 550 },
+  { id: 'costume_devil', type: 'costume', name: 'Şeytan', price: 550 },
+  { id: 'costume_angel', type: 'costume', name: 'Mələk', price: 550, anim: true },
+  { id: 'costume_pirate', type: 'costume', name: 'Quldur kapitan', price: 600 },
+  { id: 'costume_robot', type: 'costume', name: 'Robot', price: 650 },
+  { id: 'costume_astronaut', type: 'costume', name: 'Kosmonavt', price: 700 },
+  { id: 'costume_knight', type: 'costume', name: 'Cəngavər', price: 700 },
+  { id: 'costume_vampire', type: 'costume', name: 'Vampir', price: 750 },
+  { id: 'costume_bride', type: 'costume', name: 'Gəlin', price: 750 },
+  { id: 'costume_king', type: 'costume', name: 'Kral', price: 850 },
+  { id: 'costume_queen', type: 'costume', name: 'Kraliça', price: 850 },
+  // Papaqlar
+  { id: 'hat_party', type: 'hat', name: 'Bayram papağı', price: 60 },
+  { id: 'hat_santa', type: 'hat', name: 'Şaxta baba', price: 100 },
+  { id: 'hat_top', type: 'hat', name: 'Silindr', price: 120 },
+  { id: 'hat_cowboy', type: 'hat', name: 'Kovboy', price: 150 },
+  { id: 'hat_wizard', type: 'hat', name: 'Sehrbaz', price: 180 },
+  { id: 'hat_pirate', type: 'hat', name: 'Quldur', price: 200 },
+  { id: 'hat_crown', type: 'hat', name: 'Tac', price: 300 },
+  { id: 'hat_halo', type: 'hat', name: 'Mələk halqası', price: 350, anim: true },
+  // Üz aksesuarları
+  { id: 'face_mustache', type: 'face', name: 'Bığ', price: 60 },
+  { id: 'face_nerd', type: 'face', name: 'Ağıllı eynək', price: 70 },
+  { id: 'face_sun', type: 'face', name: 'Gün eynəyi', price: 80 },
+  { id: 'face_clown', type: 'face', name: 'Təlxək burnu', price: 90 },
+  { id: 'face_patch', type: 'face', name: 'Göz bağı', price: 100 },
+  { id: 'face_mono', type: 'face', name: 'Monokl', price: 120 },
+  { id: 'face_mask', type: 'face', name: 'Maska', price: 150 },
+  // Arxa aksesuarlar
+  { id: 'back_bag', type: 'back', name: 'Çanta', price: 80 },
+  { id: 'back_cape', type: 'back', name: 'Plaş', price: 200 },
+  { id: 'back_wings', type: 'back', name: 'Mələk qanadı', price: 350, anim: true },
+  { id: 'back_bat', type: 'back', name: 'Yarasa qanadı', price: 350, anim: true },
+  { id: 'back_jet', type: 'back', name: 'Reaktiv çanta', price: 450, anim: true },
+  // Ev heyvanları (personajın yanında gəzir)
+  { id: 'pet_chick', type: 'pet', name: 'Cücə', emoji: '🐥', price: 100 },
+  { id: 'pet_dog', type: 'pet', name: 'İt', emoji: '🐶', price: 150 },
+  { id: 'pet_cat', type: 'pet', name: 'Pişik', emoji: '🐱', price: 150 },
+  { id: 'pet_bunny', type: 'pet', name: 'Dovşan', emoji: '🐰', price: 200 },
+  { id: 'pet_fox', type: 'pet', name: 'Tülkü', emoji: '🦊', price: 250 },
+  { id: 'pet_ghost', type: 'pet', name: 'Kiçik kabus', emoji: '👻', price: 300 },
+  { id: 'pet_panda', type: 'pet', name: 'Panda', emoji: '🐼', price: 350 },
+  { id: 'pet_dragon', type: 'pet', name: 'Əjdaha balası', emoji: '🐉', price: 500 },
+  { id: 'pet_unicorn', type: 'pet', name: 'Təkbuynuz', emoji: '🦄', price: 600 },
+  // Hazır evlər (premium)
+  { id: 'house_igloo', type: 'house', name: 'İqlu', price: 400 },
+  { id: 'house_tree', type: 'house', name: 'Ağac ev', price: 450 },
+  { id: 'house_pagoda', type: 'house', name: 'Pagoda', price: 500 },
+  { id: 'house_mill', type: 'house', name: 'Dəyirman', price: 600, anim: true },
+  { id: 'house_castle', type: 'house', name: 'Şato', price: 800 },
+  { id: 'house_tower', type: 'house', name: 'Qız qalası', price: 1000 },
+  // Ölüm effektləri: gecə öldürüləndə evinin qarşısında oynayır, hamı görür
+  { id: 'death_chasm', type: 'death', name: 'Yerin yarılması', emoji: '🌋', price: 350, anim: true },
+  { id: 'death_poison', type: 'death', name: 'Zəhər', emoji: '☠️', price: 150, anim: true },
+  { id: 'death_slash', type: 'death', name: 'Bıçaq zərbəsi', emoji: '🗡️', price: 150, anim: true },
+  { id: 'death_lightning', type: 'death', name: 'İldırım', emoji: '⚡', price: 180, anim: true },
+  { id: 'death_meteor', type: 'death', name: 'Meteor', emoji: '☄️', price: 200, anim: true },
+  { id: 'death_piano', type: 'death', name: 'Düşən piano', emoji: '🎹', price: 250, anim: true },
+  { id: 'death_shark', type: 'death', name: 'Köpək balığı', emoji: '🦈', price: 300, anim: true },
+  { id: 'death_rocket', type: 'death', name: 'Raket', emoji: '🚀', price: 350, anim: true },
+  { id: 'death_ufo', type: 'death', name: 'UFO oğurluğu', emoji: '🛸', price: 400, anim: true },
+  { id: 'death_dragon', type: 'death', name: 'Əjdaha atəşi', emoji: '🐉', price: 500, anim: true },
+
   { id: 'emerald', type: 'name', name: 'Zümrüd', price: 30 },
   { id: 'ruby', type: 'name', name: 'Yaqut', price: 30 },
   { id: 'ocean', type: 'name', name: 'Okean', price: 50 },
@@ -95,10 +172,14 @@ const AD_LIMITS = { title: 40, body: 120, maxActive: 10 };
 
 // ---------- İnno satışı ----------
 // Ödəniş WhatsApp üzərindən: oyunçu paketi seçir, hazır mesajla yazır, admin paneldən innonu əlavə edir.
+// Nə qədər çox alınsa, 1 inno o qədər ucuzdur (500 inno = 15 AZN)
 const INNO_PACKS = [
   { inno: 20, price: 2 },
-  { inno: 100, price: 9 },
-  { inno: 500, price: 40 },
+  { inno: 50, price: 4 },
+  { inno: 150, price: 8 },
+  { inno: 300, price: 12 },
+  { inno: 500, price: 15 },
+  { inno: 1000, price: 25 },
 ];
 const WHATSAPP = process.env.PG_WHATSAPP || '994517370071'; // wa.me formatı: + və boşluqsuz
 // İlk alış üçün sərfəli təklif (admin ödənişi görüb innonu əlavə edir)
@@ -107,9 +188,27 @@ const STARTER_PACK = { inno: 150, price: 5 };
 // Gündəlik bonus: ardıcıl girişin 1..7-ci günü (7-dən sonra yenidən 1)
 const DAILY = [5, 5, 10, 10, 15, 20, 50];
 
+// Dəvət bonusu: dəvət olunan oyunçu ilk oyununu (ən azı 3 nəfərlik) bitirəndə hər ikisi inno alır.
+// Bir nəfər ən çox `max` dəvət üçün qazanc ala bilər.
+const REFERRAL = { inviter: 15, invitee: 10, max: 10 };
+
 // Həftənin təklifi: hər həftə bir premium əşyaya endirim (həftə nömrəsinə görə sabit seçilir)
 const DEAL_DISCOUNT = 0.3;
 const DEAL_MIN_PRICE = 150;
+
+// Pulsuz personaj redaktoru: dəri, saç forması, saç rəngi, köynək (indekslər, rənglər müştəri tərəfdədir)
+const CHAR_RANGES = { skin: 8, hair: 14, hairColor: 14, shirt: 16, eyes: 6, brows: 4, mouth: 6, outfit: 6, pants: 8, extra: 5 };
+const CHAR_REQUIRED = ['skin', 'hair', 'hairColor', 'shirt']; // köhnə hesablar yalnız bunları saxlayır, qalanı 0 sayılır
+function cleanChar(c) {
+  if (!c || typeof c !== 'object') return null;
+  const out = {};
+  for (const [k, n] of Object.entries(CHAR_RANGES)) {
+    const raw = c[k] === undefined && !CHAR_REQUIRED.includes(k) ? 0 : Number(c[k]);
+    if (!Number.isInteger(raw) || raw < 0 || raw >= n) return null;
+    out[k] = raw;
+  }
+  return out;
+}
 
 // Bazada saxlanan {name, bg, badge} -> müştəriyə göndərilən görünüş (badge emoji ilə)
 function lookView(look) {
@@ -119,6 +218,8 @@ function lookView(look) {
     const item = look[t.id] && byId.get(look[t.id]);
     if (item) out[t.id] = t.id === 'badge' ? item.emoji : item.id;
   }
+  const ch = cleanChar(look.char);
+  if (ch) out.char = ch;
   return Object.keys(out).length ? out : null;
 }
 
@@ -144,6 +245,6 @@ function priceOf(item, t = Date.now()) {
 }
 
 module.exports = {
-  DEFAULT_REWARDS, DEFAULT_PRIZES, TYPES, ITEMS, byId, lookView, AD_PLANS, AD_THEMES, AD_LIMITS, INNO_PACKS, WHATSAPP,
-  STARTER_PACK, DAILY, weeklyDeal, priceOf,
+  DEFAULT_REWARDS, DEFAULT_PRIZES, TYPES, ITEMS, byId, lookView, cleanChar, AD_PLANS, AD_THEMES, AD_LIMITS, INNO_PACKS, WHATSAPP,
+  STARTER_PACK, DAILY, REFERRAL, weeklyDeal, priceOf,
 };
