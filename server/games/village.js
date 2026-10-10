@@ -493,7 +493,7 @@ function result(s) {
 
 module.exports = {
   id: 'village',
-  name: 'Kənd',
+  name: 'Mafiya',
   icon: '🏘️',
   description: 'Online kənd oyunu: gecə mafia ov edir, gündüz kənd çatda müzakirə edib səs verir.',
   minPlayers: 4,

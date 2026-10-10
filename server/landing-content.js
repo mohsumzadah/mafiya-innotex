@@ -97,4 +97,73 @@ const GAMES = {
   },
 };
 
-module.exports = { SITE, GAMES, LANGS: ['az', 'ru', 'en'] };
+
+// ---- Şəkillər (oyundan real ekran görüntüləri), rollar, məsləhətlər: SEO üçün zəngin məzmun ----
+const SHOT_KEYS = ['discussion', 'night', 'vote', 'rooms', 'shop', 'home'];
+SITE.az.shotsTitle = 'Oyundan görüntülər';
+SITE.az.shots = {
+  discussion: ['Gündüz müzakirəsi', 'Mafiya oyunu: gündüz müzakirəsi və çat, personajlar, heyvanlar və evlər meydanda'],
+  night: ['Gecə fazası', 'Mafiya oyununda gecə: komissar yoxlamaq istədiyi oyunçunu seçir'],
+  vote: ['Səsvermə', 'Mafiya oyununda səsvermə: kimi kənddən qovuruq?'],
+  rooms: ['Otaq dili seçimi', 'Otaq yaradanda dil seçimi: Azərbaycan, rus və ingilis dilli otaqlar'],
+  shop: ['Hazır tiplər', 'Mağazada hazır tiplər: mafiya, komissar, kəndli, cəngavər, gəlin və kraliça'],
+  home: ['Ana səhifə', 'Mafiya oyununun ana səhifəsi: sürətli oyna və açıq otaqlar'],
+};
+SITE.ru.shotsTitle = 'Скриншоты игры';
+SITE.ru.shots = {
+  discussion: ['Дневное обсуждение', 'Игра Мафия онлайн: дневное обсуждение в чате, персонажи, питомцы и домики на площади'],
+  night: ['Ночная фаза', 'Мафия онлайн ночью: комиссар выбирает, кого проверить'],
+  vote: ['Голосование', 'Голосование в мафии онлайн: кого изгоняем из деревни?'],
+  rooms: ['Язык комнаты', 'Создание комнаты: выбор языков общения — русский, азербайджанский, английский'],
+  shop: ['Образы персонажей', 'Магазин образов: мафиози, комиссар, крестьянин, рыцарь, невеста и королева'],
+  home: ['Главный экран', 'Главный экран игры Мафия: быстрая игра и открытые комнаты'],
+};
+SITE.en.shotsTitle = 'Game screenshots';
+SITE.en.shots = {
+  discussion: ['Day discussion', 'Online Mafia game: day discussion in chat with characters, pets and houses in the square'],
+  night: ['Night phase', 'Mafia game at night: the detective picks who to investigate'],
+  vote: ['Voting', 'Voting in online Mafia: who do we banish from the village?'],
+  rooms: ['Room language', 'Creating a room: choose the languages spoken — Azerbaijani, Russian, English'],
+  shop: ['Character looks', 'Shop outfits: mobster, detective, villager, knight, bride and queen'],
+  home: ['Home screen', 'Mafia game home screen: quick play and open rooms'],
+};
+
+SITE.az.rolesTitle = 'Mafiya oyununda rollar';
+SITE.ru.rolesTitle = 'Роли в игре Мафия';
+SITE.en.rolesTitle = 'Roles in the Mafia game';
+SITE.az.tipsTitle = 'Mafiya oyununda qalib gəlmək üçün məsləhətlər';
+SITE.ru.tipsTitle = 'Советы, как выигрывать в мафию';
+SITE.en.tipsTitle = 'Tips to win at Mafia';
+SITE.az.langsTitle = 'Öz dilində oyna';
+SITE.ru.langsTitle = 'Играйте на своём языке';
+SITE.en.langsTitle = 'Play in your language';
+SITE.az.langsText = 'Otağı quran adam otaqda hansı dillərdə danışılacağını seçir: Azərbaycan, rus və ya ingilis. Açıq otaqlar siyahısında sənin dilinə uyğun otaqlar yuxarıda görünür, «Sürətli oyna» isə səni məhz öz dilində danışılan otağa qoşur. Beləcə azərbaycanlılar və rusdillilər bir-birini anlayaraq rahat oynayır.';
+SITE.ru.langsText = 'Создатель комнаты выбирает, на каких языках общаются игроки: русский, азербайджанский или английский. В списке открытых комнат сверху показываются комнаты на вашем языке, а «Быстрая игра» подбирает комнату именно с вашим языком. Так русскоязычные и азербайджанские игроки спокойно понимают друг друга.';
+SITE.en.langsText = 'The room creator picks which languages are spoken in the room: Azerbaijani, Russian or English. In the open rooms list, rooms in your language are shown first, and “Quick play” puts you into a room that speaks your language, so everyone understands each other.';
+
+GAMES.village.az.roles = [
+  ['Mafiya', 'Gecələr yoldaşları ilə gizlicə bir nəfəri seçib aradan götürür. Gündüz özünü vətəndaş kimi aparır, şübhəni başqasına yönəldir.'],
+  ['Həkim', 'Hər gecə bir nəfəri qoruyur. Mafiya həmin adamı seçsə, o sağ qalır. Özünü də qoruya bilər.'],
+  ['Komissar', 'Hər gecə bir oyunçunun mafiya olub-olmadığını öyrənir. Bu məlumatı gündüz ehtiyatla paylaşmaq lazımdır.'],
+  ['Vətəndaş', 'Xüsusi qabiliyyəti yoxdur, amma səsi var. Çatda müzakirə edib, kimin yalan danışdığını tapmalıdır.'],
+];
+GAMES.village.ru.roles = [
+  ['Мафия', 'Ночью тайно выбирает жертву вместе с напарниками. Днём изображает мирного жителя и переводит подозрения на других.'],
+  ['Доктор', 'Каждую ночь защищает одного игрока. Если мафия выбрала его, он остаётся жив. Может защитить и себя.'],
+  ['Комиссар', 'Каждую ночь узнаёт, мафия ли выбранный игрок. Делиться этим знанием днём нужно осторожно.'],
+  ['Мирный житель', 'Особых способностей нет, но есть голос. Обсуждает в чате и вычисляет, кто лжёт.'],
+];
+GAMES.village.en.roles = [
+  ['Mafia', 'Secretly picks a victim with teammates at night. By day acts like a citizen and steers suspicion elsewhere.'],
+  ['Doctor', 'Protects one player each night. If the mafia chose them, they survive. Can protect themselves too.'],
+  ['Detective', 'Learns each night whether a chosen player is mafia. Share this carefully during the day.'],
+  ['Citizen', 'No special power, but a vote. Discusses in chat and works out who is lying.'],
+];
+GAMES.village.az.tips = ['Çatda çox yazın, amma əsassız ittiham etməyin: səssiz qalan da, həddindən artıq danışan da şübhə doğurur.', 'Komissarsınızsa, tapdığınız mafiyanı dərhal açmayın: əvvəl inamlı oyunçulara işarə verin.', 'Mafiya olaraq yoldaşınızı müdafiə etməyin, bu sizi ələ verər.', 'Kimin kimə səs verdiyini izləyin: mafiya tez-tez bir-birinə səs verməkdən çəkinir.', 'Şəxsi qeyd dəftərində kimin nə dediyini yazın, ölən oyunçunun qeydi hamıya açılır.'];
+GAMES.village.ru.tips = ['Активно общайтесь в чате, но не обвиняйте без причины: подозрение вызывает и молчун, и тот, кто говорит слишком много.', 'Если вы комиссар, не раскрывайте найденную мафию сразу: сначала намекните надёжным игрокам.', 'Играя за мафию, не защищайте напарника слишком явно: это выдаёт вас.', 'Следите, кто за кого голосует: мафия часто избегает голосовать друг за друга.', 'Записывайте в личные заметки, кто что сказал: заметки выбывшего игрока становятся видны всем.'];
+GAMES.village.en.tips = ['Chat a lot but do not accuse without reason: both silence and over-talking raise suspicion.', 'As the detective, do not reveal a found mafia member at once: hint to trustworthy players first.', 'As mafia, do not defend your partner too obviously, it gives you away.', 'Watch who votes for whom: mafia members often avoid voting for each other.', 'Keep notes of who said what; a player’s notes become visible to everyone once they are eliminated.'];
+GAMES.village.az.faq.push(['Mafiya oyununu qeydiyyatsız oynamaq olarmı?', 'Bəli. Yalnız ad yazıb «Sürətli oyna» basmaq kifayətdir. Qeydiyyat xal, reytinq və mağaza üçün lazımdır.'], ['Mafiya oyunu pulsuzdur?', 'Bəli, oyun pulsuzdur. İstəyə görə mağazada personaj görünüşləri və heyvanlar inno ilə alınır, oyunun gedişinə təsir etmir.']);
+GAMES.village.ru.faq.push(['Нужна ли регистрация, чтобы играть в мафию?', 'Нет. Достаточно ввести ник и нажать «Быстрая игра». Регистрация нужна для очков, рейтинга и магазина.'], ['Игра Мафия бесплатная?', 'Да, играть бесплатно. По желанию в магазине за inno покупаются образы и питомцы, они не влияют на ход игры.']);
+GAMES.village.en.faq.push(['Do I need to register to play Mafia?', 'No. Enter a nickname and tap “Quick play”. Registration is only needed for points, the leaderboard and the shop.'], ['Is the Mafia game free?', 'Yes, it is free. Optional looks and pets in the shop are bought with inno and do not affect gameplay.']);
+
+module.exports = { SITE, GAMES, LANGS: ['az', 'ru', 'en'], SHOT_KEYS };

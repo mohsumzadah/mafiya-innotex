@@ -1,14 +1,29 @@
 {
-  "name": "Mafiya Kəndi — Online Mafia kənd oyunu",
-  "short_name": "Mafiya Kəndi",
-  "description": "Online kənd oyunu (Mafia): çat, səsvermə, rollar",
+  "name": "Mafiya oyunu — Online Mafiya / Мафия онлайн",
+  "short_name": "Mafiya",
+  "description": "Online Mafiya oyunu: çat, səsvermə, rollar. Azərbaycan və rus dilli otaqlar. Онлайн-мафия с друзьями.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f4f5f8",
   "theme_color": "#4338ca",
   "lang": "az",
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "id": "/",
+  "categories": [
+    "games",
+    "entertainment"
   ]
 }

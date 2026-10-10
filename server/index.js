@@ -505,7 +505,7 @@ app.use(
   express.static(path.join(__dirname, '..', 'public'), {
     // Fayllar kiçikdir: brauzer hər dəfə yoxlasın (ETag ilə), yeni versiya dərhal görünsün
     // Səs faylları dəyişmir, bir həftə yaddaşda qalsın
-    setHeaders: (res, file) => res.setHeader('Cache-Control', file.includes(`${path.sep}audio${path.sep}`) ? 'public, max-age=604800' : 'no-cache'),
+    setHeaders: (res, file) => res.setHeader('Cache-Control', file.includes(`${path.sep}audio${path.sep}`) ? 'public, max-age=604800' : file.includes(`${path.sep}img${path.sep}`) || /og(-\w+)?\.jpg$/.test(file) ? 'public, max-age=86400' : 'no-cache'),
   })
 );
 

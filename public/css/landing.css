@@ -36,3 +36,15 @@ summary { font-weight: 700; cursor: pointer; }
 .final { text-align: center; padding: 24px 0; }
 footer { padding: 32px 16px; color: var(--muted); font-size: 14px; text-align: center; }
 footer nav a { color: var(--muted); }
+
+.shots-section { overflow: hidden; }
+.shots { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.shots figure { margin: 0; }
+.shots img { width: 100%; height: auto; display: block; border-radius: 18px; border: 1px solid var(--line); box-shadow: 0 14px 30px -18px rgba(15, 23, 42, .5); background: var(--card); }
+.shots figcaption { text-align: center; font-size: 13px; color: var(--muted); margin-top: 6px; font-weight: 600; }
+@media (max-width: 560px) { .shots { grid-template-columns: repeat(2, 1fr); } }
+.roles { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; }
+.role { display: flex; flex-direction: column; gap: 4px; padding: 16px; border-radius: 16px; background: var(--card); border: 1px solid var(--line); }
+.role span { color: var(--muted); font-size: 15px; }
+
+.big-logo { width: 64px; height: 64px; border-radius: 18px; box-shadow: 0 10px 24px -12px rgba(67, 56, 202, .7); }

@@ -1064,6 +1064,7 @@
       const stick = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
       const keep = log.scrollTop;
       log.innerHTML = chatMsgs(room, g);
+      translateDom(log); // yeni mesajlar seçilmiş dildə görünsün
       log.scrollTop = stick ? log.scrollHeight : keep;
       if (local.tab === 'chat') local.seen = (g.chat || []).length;
       const dot = document.querySelector('.vil-dot');
